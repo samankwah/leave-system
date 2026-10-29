@@ -2,8 +2,8 @@ import { hasReservation } from "@/domain/capacity";
 import { analysePlan, type PlanAnalysis } from "@/domain/planRules";
 import { hasErrors } from "@/domain/requestRules";
 import type { Allocation, Period } from "@/domain/types";
-import { formatRange, isValidISO, yearOf } from "@/domain/workingDays";
-import { nowIso, run, tx, type DB } from "../db";
+import { formatRange, isValidISO, monthsSpanned, yearOf } from "@/domain/workingDays";
+import { capKeys, empKey, lockKeys, nowIso, run, tx, type DB } from "../db";
 import { badRequest, forbidden, notFound, rejected } from "../errors";
 import { audit } from "../repos/audit";
 import {
@@ -15,6 +15,10 @@ import { loadEmployeeContext } from "./context";
 import { approverRecipients, assertCanDecide, notifyIfMonthsFull, resolveApprover } from "./workflow";
 
 const actorOf = (u: User) => ({ id: u.id, name: u.fullName });
+
+/** Calendar months a set of periods touches (capacity lock keys). */
+export const monthsOfPeriods = (periods: Period[]) =>
+  periods.filter((p) => isValidISO(p.start) && isValidISO(p.end) && p.start <= p.end).flatMap((p) => monthsSpanned(p.start, p.end));
 
 export async function analyseForEmployee(
   db: DB, employeeId: number, year: number, periods: Period[], mode: "submit" | "approve", planId?: number,
@@ -47,6 +51,7 @@ function assertPeriodsShape(periods: Period[], year: number) {
 export async function savePlanDraft(db: DB, actor: User, year: number, periods: Period[]): Promise<Plan> {
   assertPeriodsShape(periods, year);
   return tx(db, async (db) => {
+    await lockKeys(db, [empKey(actor.id)]);
     let plan = await getWorkingPlan(db, actor.id, year);
     if (plan?.status === "submitted") throw badRequest("This plan is awaiting approval and cannot be edited. Ask your approver to return it for revision if changes are needed.");
     if (!plan) {
@@ -68,6 +73,10 @@ export async function savePlanDraft(db: DB, actor: User, year: number, periods: 
 
 export function submitPlan(db: DB, actor: User, planId: number): Promise<Plan> {
   return tx(db, async (db) => {
+    const pre = await getPlan(db, planId);
+    if (!pre) throw notFound("Plan");
+    // Lock this employee and every month the plan touches, then re-read under the lock.
+    await lockKeys(db, [empKey(pre.employeeId), ...capKeys(monthsOfPeriods(pre.periods))]);
     const plan = await getPlan(db, planId);
     if (!plan) throw notFound("Plan");
     if (plan.employeeId !== actor.id) throw forbidden("You can only submit your own plan.");
@@ -96,6 +105,7 @@ export function submitPlan(db: DB, actor: User, planId: number): Promise<Plan> {
 /** Creates a new draft version from the approved plan. The approved plan stays in force until the amendment is approved. */
 export function startAmendment(db: DB, actor: User, year: number): Promise<Plan> {
   return tx(db, async (db) => {
+    await lockKeys(db, [empKey(actor.id)]);
     const approved = await getApprovedPlan(db, actor.id, year);
     if (!approved) throw badRequest("There is no approved plan to amend.");
     if (await getWorkingPlan(db, actor.id, year)) throw badRequest("You already have a plan version in progress for this year.");
@@ -109,6 +119,7 @@ export function startAmendment(db: DB, actor: User, year: number): Promise<Plan>
 
 export function discardDraft(db: DB, actor: User, planId: number): Promise<void> {
   return tx(db, async (db) => {
+    await lockKeys(db, [empKey(actor.id)]);
     const plan = await getPlan(db, planId);
     if (!plan) throw notFound("Plan");
     if (plan.employeeId !== actor.id) throw forbidden();
@@ -122,6 +133,9 @@ export type Decision = "approve" | "reject" | "return";
 
 export function decidePlan(db: DB, actor: User, planId: number, decision: Decision, reason: string): Promise<Plan> {
   return tx(db, async (db) => {
+    const pre = await getPlan(db, planId);
+    if (!pre) throw notFound("Plan");
+    await lockKeys(db, [empKey(pre.employeeId), ...(decision === "approve" ? capKeys(monthsOfPeriods(pre.periods)) : [])]);
     const plan = await getPlan(db, planId);
     if (!plan) throw notFound("Plan");
     assertCanDecide(actor, plan);

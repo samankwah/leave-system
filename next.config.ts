@@ -3,6 +3,8 @@ import type { NextConfig } from "next";
 const nextConfig: NextConfig = {
   serverExternalPackages: ["exceljs", "pg", "@electric-sql/pglite"],
   poweredByHeader: false,
+  // Import only the MUI components/icons actually used (smaller client bundles, faster compiles).
+  experimental: { optimizePackageImports: ["@mui/material", "@mui/icons-material"] },
   async headers() {
     return [{
       source: "/(.*)",

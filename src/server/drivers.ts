@@ -1,13 +1,18 @@
 import type { PGlite, Transaction } from "@electric-sql/pglite";
 import type { Pool, PoolClient } from "pg";
-import { WRITE_LOCK_SQL, type DB, type QueryResult } from "./db";
+import type { DB, QueryResult } from "./db";
+
+/** Optional query counter for diagnostics and tests (LEAVE_QUERY_STATS=1 or `countQueries`). */
+export const queryStats = { count: 0, enabled: process.env.LEAVE_QUERY_STATS === "1" };
 
 /* ----------------------------- node-postgres (Neon) ----------------------------- */
 
 class PgDb implements DB {
+  private hooks: ((db: DB) => Promise<void>)[] = [];
   constructor(private readonly q: Pool | PoolClient, readonly inTx = false) {}
 
   async query<T>(sql: string, params: unknown[] = []): Promise<QueryResult<T>> {
+    if (queryStats.enabled) queryStats.count++;
     const r = await this.q.query(sql, params);
     return { rows: r.rows as T[], rowCount: r.rowCount ?? 0 };
   }
@@ -16,12 +21,18 @@ class PgDb implements DB {
     await this.q.query(sql);
   }
 
+  beforeCommit(hook: (db: DB) => Promise<void>) {
+    if (!this.inTx) throw new Error("beforeCommit requires a transaction");
+    this.hooks.push(hook);
+  }
+
   async transaction<T>(fn: (db: DB) => Promise<T>): Promise<T> {
     const client = await (this.q as Pool).connect();
     try {
       await client.query("BEGIN");
-      await client.query(WRITE_LOCK_SQL);
-      const result = await fn(new PgDb(client, true));
+      const t = new PgDb(client, true);
+      const result = await fn(t);
+      for (const h of t.hooks) await h(t);
       await client.query("COMMIT");
       return result;
     } catch (e) {
@@ -42,7 +53,8 @@ export async function openPg(connectionString: string): Promise<DB> {
   const pg = await import("pg");
   // COUNT(*) and other int8 results arrive as strings by default; these values are small.
   pg.types.setTypeParser(20, (v) => Number.parseInt(v, 10));
-  const pool = new pg.Pool({ connectionString, max: 5, idleTimeoutMillis: 10_000 });
+  // Neon's pooled endpoint is PgBouncer, so a larger per-instance pool is cheap.
+  const pool = new pg.Pool({ connectionString, max: 10, idleTimeoutMillis: 10_000 });
   try {
     const { attachDatabasePool } = await import("@vercel/functions");
     attachDatabasePool(pool);
@@ -55,9 +67,11 @@ export async function openPg(connectionString: string): Promise<DB> {
 /* --------------------------------- PGlite --------------------------------- */
 
 class PgliteDb implements DB {
+  private hooks: ((db: DB) => Promise<void>)[] = [];
   constructor(private readonly pg: PGlite | Transaction, readonly inTx = false) {}
 
   async query<T>(sql: string, params: unknown[] = []): Promise<QueryResult<T>> {
+    if (queryStats.enabled) queryStats.count++;
     const r = await this.pg.query<T>(sql, params);
     return { rows: r.rows, rowCount: r.affectedRows ?? r.rows.length };
   }
@@ -66,11 +80,18 @@ class PgliteDb implements DB {
     await this.pg.exec(sql);
   }
 
+  beforeCommit(hook: (db: DB) => Promise<void>) {
+    if (!this.inTx) throw new Error("beforeCommit requires a transaction");
+    this.hooks.push(hook);
+  }
+
   /** PGlite serialises transactions against all other queries on the instance. */
   transaction<T>(fn: (db: DB) => Promise<T>): Promise<T> {
-    return (this.pg as PGlite).transaction(async (t) => {
-      await t.query(WRITE_LOCK_SQL);
-      return fn(new PgliteDb(t, true));
+    return (this.pg as PGlite).transaction(async (tr) => {
+      const t = new PgliteDb(tr, true);
+      const result = await fn(t);
+      for (const h of t.hooks) await h(t);
+      return result;
     });
   }
 

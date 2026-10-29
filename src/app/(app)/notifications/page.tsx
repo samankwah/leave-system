@@ -6,8 +6,9 @@ import { requireUser } from "@/server/session";
 import NotificationList from "./NotificationList";
 
 export const metadata: Metadata = { title: "Notifications" };
+const PAGE_SIZE = 50;
 
 export default async function NotificationsPage() {
   const user = await requireUser();
-  return <NotificationList items={await listNotifications(await getDb(), user.id, 200)} today={todayIso()} />;
+  return <NotificationList items={await listNotifications(await getDb(), user.id, PAGE_SIZE)} today={todayIso()} />;
 }

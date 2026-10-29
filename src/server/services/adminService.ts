@@ -44,6 +44,8 @@ export async function saveEmployee(db: DB, actor: User, input: unknown): Promise
   assertHr(actor);
   const e = parse(employeeSchema, input);
   if (!(await getCategory(db, e.categoryCode))) throw badRequest("Unknown staff category.");
+  const pw = e.id ? null : tempPassword();
+  const pwHash = pw ? await hashPassword(pw) : null; // hashed before the transaction opens
   return tx(db, async (db) => {
     const clash = await get<{ id: number }>(
       db, "SELECT id FROM users WHERE (lower(employee_id) = lower(?) OR lower(email) = lower(?)) AND id != ?", e.employeeId, e.email, e.id ?? 0,
@@ -66,15 +68,14 @@ export async function saveEmployee(db: DB, actor: User, input: unknown): Promise
       await audit(db, actorOf(actor), "employee.update", "user", e.id, `Updated profile of ${after.fullName}`, { changed });
       return { user: after };
     }
-    const pw = tempPassword();
     const id = await insert(
       db,
       `INSERT INTO users (employee_id, email, full_name, department_id, office_id, job_title, category_code, role, manager_id, password_hash, created_at)
        VALUES (?, ?, ?, ?, ?, ?, ?, 'employee', ?, ?, ?)`,
-      e.employeeId, e.email, e.fullName, e.departmentId, e.officeId, e.jobTitle, e.categoryCode, e.managerId, hashPassword(pw), nowIso(),
+      e.employeeId, e.email, e.fullName, e.departmentId, e.officeId, e.jobTitle, e.categoryCode, e.managerId, pwHash, nowIso(),
     );
     await audit(db, actorOf(actor), "employee.create", "user", id, `Created employee ${e.fullName} (${e.employeeId}, ${e.categoryCode})`);
-    return { user: (await getUser(db, id))!, tempPassword: pw };
+    return { user: (await getUser(db, id))!, tempPassword: pw! };
   });
 }
 
@@ -224,10 +225,11 @@ export async function updateAccess(db: DB, actor: User, userId: number, input: u
 export async function resetPassword(db: DB, actor: User, userId: number): Promise<string> {
   assertSysadmin(actor);
   const pw = tempPassword();
+  const pwHash = await hashPassword(pw);
   await tx(db, async (db) => {
     const u = await getUser(db, userId);
     if (!u) throw notFound("User");
-    await run(db, "UPDATE users SET password_hash = ?, failed_logins = 0, locked_until = NULL WHERE id = ?", hashPassword(pw), userId);
+    await run(db, "UPDATE users SET password_hash = ?, failed_logins = 0, locked_until = NULL WHERE id = ?", pwHash, userId);
     await run(db, "DELETE FROM sessions WHERE user_id = ?", userId);
     await audit(db, actorOf(actor), "access.password_reset", "user", userId, `Reset password for ${u.fullName} and ended their sessions`);
   });
@@ -265,11 +267,12 @@ export async function revokeSession(db: DB, actor: User, idPrefix: string) {
 
 export async function changeOwnPassword(db: DB, actor: User, current: string, next: string) {
   const row = (await get<{ password_hash: string }>(db, "SELECT password_hash FROM users WHERE id = ?", actor.id))!;
-  if (!verifyPassword(current ?? "", row.password_hash)) throw badRequest("Your current password is incorrect.");
+  if (!(await verifyPassword(current ?? "", row.password_hash))) throw badRequest("Your current password is incorrect.");
   const problem = passwordProblem(next ?? "");
   if (problem) throw badRequest(problem);
+  const nextHash = await hashPassword(next);
   await tx(db, async (db) => {
-    await run(db, "UPDATE users SET password_hash = ? WHERE id = ?", hashPassword(next), actor.id);
+    await run(db, "UPDATE users SET password_hash = ? WHERE id = ?", nextHash, actor.id);
     await audit(db, actorOf(actor), "auth.password_change", "user", actor.id, "Changed own password");
   });
 }

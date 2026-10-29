@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useRef, useState } from "react";
+import { memo, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import Box from "@mui/material/Box";
 import ButtonBase from "@mui/material/ButtonBase";
 import IconButton from "@mui/material/IconButton";
@@ -88,6 +88,73 @@ export function CalendarLegend({ showDraft, compact }: { showDraft?: boolean; co
   );
 }
 
+/* ----------------------------------- day ----------------------------------- */
+
+interface DayProps {
+  d: string;
+  label: string;
+  bg: string;
+  fg: string;
+  bold: boolean;
+  dim: boolean;
+  today: boolean;
+  holiday?: string;
+  selectedEnd: boolean;
+  inRange: boolean;
+  restricted: boolean;
+  focusable: boolean;
+  interactive: boolean;
+  onDayClick: (d: string) => void;
+  onDayHover: (d: string | null) => void;
+  onKey: (e: React.KeyboardEvent, d: string) => void;
+  registerCell: (d: string, el: HTMLButtonElement | null) => void;
+}
+
+const DAY_SX_BASE = {
+  width: "100%", aspectRatio: "1 / 1", maxHeight: 46, borderRadius: "10px", position: "relative",
+  fontSize: 13.5, fontVariantNumeric: "tabular-nums", transition: "background-color .12s, box-shadow .12s",
+  "&.Mui-focusVisible": { outline: "2px solid", outlineColor: "secondary.main", outlineOffset: 1 },
+} as const;
+
+/** One calendar day. Memoised on primitive props, so a hover re-renders only the cells whose state changes. */
+const DayCell = memo(function DayCell(p: DayProps) {
+  const button = (
+    <ButtonBase
+      ref={(el: HTMLButtonElement | null) => p.registerCell(p.d, el)}
+      tabIndex={p.focusable ? 0 : -1}
+      aria-label={p.label}
+      disabled={!p.interactive}
+      onClick={() => p.onDayClick(p.d)}
+      onMouseEnter={() => p.onDayHover(p.d)}
+      onFocus={() => p.onDayHover(p.d)}
+      onKeyDown={(e) => p.onKey(e, p.d)}
+      sx={{
+        ...DAY_SX_BASE,
+        bgcolor: p.bg, color: p.fg, fontWeight: p.bold ? 700 : 500, opacity: p.dim ? 0.55 : 1,
+        cursor: p.restricted ? "not-allowed" : "pointer",
+        backgroundImage: p.restricted ? "repeating-linear-gradient(135deg, rgba(127,127,127,.12) 0 2px, transparent 2px 6px)" : undefined,
+        boxShadow: p.today ? (t: Theme) => `inset 0 0 0 2px ${t.vars!.palette.leave.today}` : undefined,
+        "&:hover": p.restricted ? undefined : { boxShadow: (t: Theme) => `inset 0 0 0 2px ${t.vars!.palette.primary.main}` },
+        "&.Mui-disabled": { color: p.fg, pointerEvents: "none" },
+      }}
+    >
+      {Number(p.d.slice(8))}
+      {p.holiday && (
+        <Box component="span" sx={{
+          position: "absolute", bottom: 5, left: "50%", transform: "translateX(-50%)",
+          width: 5, height: 5, borderRadius: "50%", bgcolor: p.selectedEnd ? "currentColor" : "leave.holidayAccent",
+        }} />
+      )}
+    </ButtonBase>
+  );
+  return (
+    <Box role="gridcell" aria-selected={p.inRange || p.selectedEnd} sx={{ px: 0.25 }}>
+      {/* Only holidays get a (relatively costly) tooltip; every cell already has a full aria-label. */}
+      {p.holiday ? <Tooltip title={p.holiday} disableInteractive placement="top">{button}</Tooltip> : button}
+    </Box>
+  );
+});
+
 /* ---------------------------------- month ---------------------------------- */
 
 interface MonthProps {
@@ -170,40 +237,13 @@ function MonthGrid(p: MonthProps) {
           const label = `${formatDate(d)}${weekend ? ", weekend" : ""}${holiday ? `, ${holiday}` : ""}. ${state}${isToday ? ", today" : ""}`;
 
           return (
-            <Box key={d} role="gridcell" aria-selected={inRange || isEnd} sx={{ px: 0.25 }}>
-              <Tooltip title={holiday ? `${holiday}` : ""} disableInteractive placement="top">
-                <ButtonBase
-                  ref={(el: HTMLButtonElement | null) => p.registerCell(d, el)}
-                  tabIndex={d === p.focused ? 0 : -1}
-                  aria-label={label}
-                  disabled={!p.interactive}
-                  onClick={() => p.onDayClick(d)}
-                  onMouseEnter={() => p.onDayHover(d)}
-                  onFocus={() => p.onDayHover(d)}
-                  onKeyDown={(e) => p.onKey(e, d)}
-                  sx={{
-                    width: "100%", aspectRatio: "1 / 1", maxHeight: 46, borderRadius: "10px", position: "relative",
-                    bgcolor: bg, color: fg, fontSize: 13.5, fontWeight: isEnd || isToday ? 700 : 500, fontVariantNumeric: "tabular-nums",
-                    cursor: p.restricted ? "not-allowed" : "pointer",
-                    opacity: weekend && (planned || pending || approved || (inRange && !isEnd)) ? 0.55 : 1,
-                    backgroundImage: p.restricted ? "repeating-linear-gradient(135deg, rgba(127,127,127,.12) 0 2px, transparent 2px 6px)" : undefined,
-                    boxShadow: isToday ? (t: Theme) => `inset 0 0 0 2px ${t.vars!.palette.leave.today}` : undefined,
-                    transition: "background-color .12s, box-shadow .12s",
-                    "&:hover": p.restricted ? undefined : { boxShadow: (t: Theme) => `inset 0 0 0 2px ${t.vars!.palette.primary.main}` },
-                    "&.Mui-focusVisible": { outline: "2px solid", outlineColor: "secondary.main", outlineOffset: 1 },
-                    "&.Mui-disabled": { color: fg, pointerEvents: "none" },
-                  }}
-                >
-                  {Number(d.slice(8))}
-                  {holiday && (
-                    <Box component="span" sx={{
-                      position: "absolute", bottom: 5, left: "50%", transform: "translateX(-50%)",
-                      width: 5, height: 5, borderRadius: "50%", bgcolor: isEnd ? "currentColor" : "leave.holidayAccent",
-                    }} />
-                  )}
-                </ButtonBase>
-              </Tooltip>
-            </Box>
+            <DayCell
+              key={d} d={d} label={label} bg={bg} fg={fg} bold={isEnd || isToday}
+              dim={weekend && (planned || pending || approved || (inRange && !isEnd))}
+              today={isToday} holiday={holiday} selectedEnd={isEnd && !!p.rangeStart} inRange={inRange} restricted={p.restricted}
+              focusable={d === p.focused} interactive={p.interactive}
+              onDayClick={p.onDayClick} onDayHover={p.onDayHover} onKey={p.onKey} registerCell={p.registerCell}
+            />
           );
         })}
       </Box>
@@ -263,16 +303,24 @@ export default function LeaveCalendar(props: {
   if (rangeStart && rangeEnd && rangeEnd < rangeStart) [rangeStart, rangeEnd] = [rangeEnd, rangeStart];
   const previewDays = rangeStart && rangeEnd ? countWorkingDays(rangeStart, rangeEnd, holidaySet) : 0;
 
-  const isRestricted = (m: MonthKey) => props.restrictedMonths.includes(monthNumber(m));
+  // Callbacks passed to memoised cells must be stable; they read the latest props/state from a ref.
+  const latest = useRef({ props, selection, months, month, onSelect });
+  latest.current = { props, selection, months, month, onSelect };
 
-  function click(d: string) {
+  const click = useCallback((d: string) => {
+    const { props: pr, selection: sel, onSelect: select } = latest.current;
     const m = monthKeyOf(d);
-    if (isRestricted(m)) { props.onRestricted?.(m); return; }
+    if (pr.restrictedMonths.includes(monthNumber(m))) { pr.onRestricted?.(m); return; }
     setFocused(d);
-    onSelect?.(nextSelection(selection, d));
-  }
+    select?.(nextSelection(sel, d));
+  }, []);
 
-  function onKey(e: React.KeyboardEvent, d: string) {
+  const registerCell = useCallback((d: string, el: HTMLButtonElement | null) => {
+    if (el) cells.current.set(d, el); else cells.current.delete(d);
+  }, []);
+
+  const onKey = useCallback((e: React.KeyboardEvent, d: string) => {
+    const { props, months, month, onSelect } = latest.current;
     const step: Record<string, number> = { ArrowLeft: -1, ArrowRight: 1, ArrowUp: -7, ArrowDown: 7 };
     if (e.key in step) {
       e.preventDefault();
@@ -292,7 +340,9 @@ export default function LeaveCalendar(props: {
       const next = addDays(d, e.key === "Home" ? -dow : 6 - dow);
       if (monthKeyOf(next) === monthKeyOf(d)) { setFocused(next); cells.current.get(next)?.focus(); }
     }
-  }
+  }, []);
+
+  const isRestricted = (m: MonthKey) => props.restrictedMonths.includes(monthNumber(m));
 
   const canPrev = !props.minMonth || month > props.minMonth;
   const canNext = !props.maxMonth || shiftMonth(month, shown - 1) < props.maxMonth;
@@ -321,7 +371,7 @@ export default function LeaveCalendar(props: {
               focused={months.includes(monthKeyOf(focused)) ? focused : `${months[0]}-01`}
               interactive={!!onSelect || !!props.onRestricted}
               onDayClick={click} onDayHover={setHover} onKey={onKey}
-              registerCell={(d, el) => { if (el) cells.current.set(d, el); else cells.current.delete(d); }}
+              registerCell={registerCell}
             />
           );
         })}

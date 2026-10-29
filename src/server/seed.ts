@@ -3,7 +3,7 @@ import { analyseRequest, hasErrors } from "@/domain/requestRules";
 import type { Period, PolicySettings, Role, RuleStatus } from "@/domain/types";
 import { formatRange } from "@/domain/workingDays";
 import { hashPassword } from "./auth";
-import { get, insert, run, tx, type DB } from "./db";
+import { get, insert, insertMany, run, tx, type DB } from "./db";
 import { audit } from "./repos/audit";
 import {
   getApprovedPlan, getPlan, insertPlan, insertRequest, listAllocations, listRequests, replacePlanPeriods, updatePlan,
@@ -95,7 +95,7 @@ export async function seed(db: DB) {
       await setSetting(db, k as keyof PolicySettings, v, POLICY_STATUS[k as keyof PolicySettings], null);
     }
     await run(db, "INSERT INTO staff_categories (code, name, entitlement_days, status) VALUES ('SENIOR', 'Senior Staff', 35, 'proposed'), ('JUNIOR', 'Junior Staff', 28, 'proposed')");
-    for (const [date, name, note] of HOLIDAYS) await run(db, "INSERT INTO public_holidays (date, name, note) VALUES (?, ?, ?)", date, name, note ?? "");
+    await insertMany(db, "public_holidays", ["date", "name", "note"], HOLIDAYS.map(([date, name, note]) => [date, name, note ?? ""]));
 
     const deptIds = new Map<string, number>();
     const officeIds = new Map<string, number>();
@@ -107,7 +107,7 @@ export async function seed(db: DB) {
 
     const ids: Ids = {};
     // Every synthetic account shares the published demo password, so it is hashed once.
-    const demoHash = hashPassword(DEMO_PASSWORD);
+    const demoHash = await hashPassword(DEMO_PASSWORD);
     for (const u of USERS) {
       const id = await insert(
         db,

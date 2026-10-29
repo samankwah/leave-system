@@ -8,6 +8,7 @@ import Box from "@mui/material/Box";
 import Button from "@mui/material/Button";
 import ButtonBase from "@mui/material/ButtonBase";
 import Chip from "@mui/material/Chip";
+import CircularProgress from "@mui/material/CircularProgress";
 import Divider from "@mui/material/Divider";
 import Drawer from "@mui/material/Drawer";
 import Grid from "@mui/material/Grid2";
@@ -212,14 +213,18 @@ function Detail({ item, isHistory, today, liveIssues, onDecide, busy, restricted
   );
 }
 
-export default function ApprovalsBoard({ pending, decided, isHr, today, overdueDays, initialItem, restrictedMonths }: {
-  pending: QueueItem[]; decided: QueueItem[]; isHr: boolean; today: string; overdueDays: number; initialItem: string | null; restrictedMonths: number[];
+export default function ApprovalsBoard({ pending, isHr, today, overdueDays, initialItem, restrictedMonths }: {
+  pending: QueueItem[]; isHr: boolean; today: string; overdueDays: number; initialItem: string | null; restrictedMonths: number[];
 }) {
   const router = useRouter();
   const toast = useToast();
   const desktop = useMediaQuery((t: Theme) => t.breakpoints.up("md"));
-  const initialTab = initialItem && !pending.some((i) => itemKey(i) === initialItem) && decided.some((i) => itemKey(i) === initialItem) ? 1 : 0;
+  // A deep link to an item that's no longer pending opens the "Recently decided" tab.
+  const initialTab = initialItem && !pending.some((i) => itemKey(i) === initialItem) ? 1 : 0;
   const [tab, setTab] = useState(initialTab);
+  // Decided items are loaded on demand, only when that tab is opened.
+  const [decided, setDecided] = useState<QueueItem[] | null>(null);
+  const [decidedError, setDecidedError] = useState<string | null>(null);
   const [kind, setKind] = useState<"all" | "plan" | "request" | "overdue">("all");
   const [dept, setDept] = useState("");
   const [selected, setSelected] = useState<string | null>(initialItem ?? null);
@@ -229,14 +234,24 @@ export default function ApprovalsBoard({ pending, decided, isHr, today, overdueD
   const [liveIssues, setLiveIssues] = useState<Issue[]>([]);
 
   const waiting = useCallback((iso: string) => Math.max(0, daysBetween(iso, today)), [today]);
-  const source = tab === 0 ? pending : decided;
-  const depts = [...new Set([...pending, ...decided].map((i) => i.employee.department))].sort();
+  const source = useMemo(() => (tab === 0 ? pending : decided ?? []), [tab, pending, decided]);
+  const depts = [...new Set([...pending, ...(decided ?? [])].map((i) => i.employee.department))].sort();
   const list = useMemo(() => source.filter((i) =>
     (kind === "all" || (kind === "overdue" ? waiting(i.submittedAt) > overdueDays : i.kind === kind)) && (!dept || i.employee.department === dept),
   ), [source, kind, dept, waiting, overdueDays]);
   const current = list.find((i) => itemKey(i) === selected) ?? (desktop ? list[0] : undefined) ?? null;
 
   useEffect(() => { setLiveIssues([]); }, [selected]);
+
+  useEffect(() => {
+    if (tab !== 1 || decided !== null) return;
+    let live = true;
+    setDecidedError(null);
+    api<QueueItem[]>("/api/approvals/decided", "GET")
+      .then((items) => { if (live) setDecided(items); })
+      .catch((e) => { if (live) setDecidedError(errorText(e)); });
+    return () => { live = false; };
+  }, [tab, decided]);
 
   const move = useCallback((delta: number) => {
     if (!list.length) return;
@@ -272,6 +287,7 @@ export default function ApprovalsBoard({ pending, decided, isHr, today, overdueD
       const next = list[idx + 1] ?? list[idx - 1];
       setSelected(next ? itemKey(next) : null);
       if (!next) setMobileOpen(false);
+      setDecided(null); // the decided list is stale now; refetch when next opened
       router.refresh();
     } catch (e) {
       if (e instanceof ApiError && e.issues.length) { setLiveIssues(e.issues); toast.error("The rules changed since this page loaded — approval is blocked."); }
@@ -300,7 +316,10 @@ export default function ApprovalsBoard({ pending, decided, isHr, today, overdueD
         )}
       </Box>
       <Box sx={{ flex: 1, overflowY: "auto" }} role="listbox" aria-label="Items">
-        {list.length === 0 ? (
+        {tab === 1 && decided === null ? (
+          decidedError ? <Alert severity="error" sx={{ m: 2 }}>{decidedError}</Alert>
+            : <Box sx={{ display: "grid", placeItems: "center", py: 6 }}><CircularProgress size={24} aria-label="Loading decisions" /></Box>
+        ) : list.length === 0 ? (
           <EmptyState compact icon={<InboxOutlinedIcon />} title={tab === 0 ? "Inbox zero" : "No decisions yet"} description={tab === 0 ? "Nothing is waiting for your decision." : undefined} />
         ) : list.map((i) => {
           const active = current && itemKey(current) === itemKey(i);

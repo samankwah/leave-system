@@ -81,7 +81,13 @@ export default function AuditView({ entries, filters }: { entries: AuditEntry[];
   const [open, setOpen] = useState<number | null>(null);
   const [integrity, setIntegrity] = useState<{ ok: boolean; checked: number; brokenAt?: number } | null>(null);
 
+  // Incremental check on load (only records added since the last verified checkpoint); a full re-check is on demand.
   useEffect(() => { api<{ ok: boolean; checked: number; brokenAt?: number }>("/api/audit/verify", "GET").then(setIntegrity).catch(() => undefined); }, []);
+  const [fullBusy, setFullBusy] = useState(false);
+  async function fullCheck() {
+    setFullBusy(true);
+    try { setIntegrity(await api("/api/audit/verify?full=1", "GET")); } finally { setFullBusy(false); }
+  }
 
   const go = (next = f) => {
     const sp = new URLSearchParams(Object.entries(next).filter(([, v]) => v) as [string, string][]);
@@ -100,6 +106,7 @@ export default function AuditView({ entries, filters }: { entries: AuditEntry[];
                   label={integrity.ok ? "Integrity verified" : "Integrity check failed"} />
               </Tooltip>
             )}
+            <Button onClick={fullCheck} disabled={fullBusy}>{fullBusy ? "Verifying…" : "Re-verify all"}</Button>
             <Button variant="outlined" startIcon={<FileDownloadOutlinedIcon />} href="/api/reports/audit?format=xlsx">Export</Button>
           </>
         } />

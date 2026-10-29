@@ -1,12 +1,13 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import NextLink from "next/link";
 import { useRouter } from "next/navigation";
 import Box from "@mui/material/Box";
 import Button from "@mui/material/Button";
 import ButtonBase from "@mui/material/ButtonBase";
 import Chip from "@mui/material/Chip";
+import CircularProgress from "@mui/material/CircularProgress";
 import Divider from "@mui/material/Divider";
 import Drawer from "@mui/material/Drawer";
 import IconButton from "@mui/material/IconButton";
@@ -38,8 +39,8 @@ const FILTERS: { key: string; label: string; statuses: string[] }[] = [
   { key: "closed", label: "Rejected / cancelled", statuses: ["rejected", "cancelled"] },
 ];
 
-export default function MyRequests({ requests, history, today, openId }: {
-  requests: LeaveRequest[]; history: Record<number, TimelineItem[]>; today: string; openId: number | null;
+export default function MyRequests({ requests, today, openId }: {
+  requests: LeaveRequest[]; today: string; openId: number | null;
 }) {
   const router = useRouter();
   const toast = useToast();
@@ -49,6 +50,16 @@ export default function MyRequests({ requests, history, today, openId }: {
   const [openReq, setOpenReq] = useState<number | null>(openId);
   const [cancelling, setCancelling] = useState<LeaveRequest | null>(null);
   const [busy, setBusy] = useState(false);
+  // Each request's timeline is fetched when its drawer opens, not sent with the page.
+  const [history, setHistory] = useState<Record<number, TimelineItem[]>>({});
+  useEffect(() => {
+    if (openReq === null || history[openReq]) return;
+    let live = true;
+    api<TimelineItem[]>(`/api/requests/${openReq}/history`, "GET")
+      .then((items) => { if (live) setHistory((h) => ({ ...h, [openReq]: items })); })
+      .catch(() => undefined);
+    return () => { live = false; };
+  }, [openReq, history]);
 
   const inYear = requests.filter((r) => year === "all" || r.year === year);
   const count = (statuses: string[]) => inYear.filter((r) => !statuses.length || statuses.includes(r.status)).length;
@@ -154,7 +165,9 @@ export default function MyRequests({ requests, history, today, openId }: {
               )}
               <Divider sx={{ my: 2.5 }} />
               <Typography variant="overline" color="text.secondary">Activity</Typography>
-              <Box sx={{ mt: 1 }}><ActivityTimeline items={history[current.id] ?? []} /></Box>
+              <Box sx={{ mt: 1 }}>
+                {history[current.id] ? <ActivityTimeline items={history[current.id]} /> : <CircularProgress size={20} aria-label="Loading activity" />}
+              </Box>
             </Box>
             {(current.status === "returned" || canCancel(current)) && (
               <Stack direction="row" spacing={1} sx={{ p: 2, borderTop: 1, borderColor: "divider", justifyContent: "flex-end" }}>

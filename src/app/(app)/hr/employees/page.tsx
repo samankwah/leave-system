@@ -9,10 +9,11 @@ import EmployeesView, { type EmployeeRow } from "./EmployeesView";
 export const metadata: Metadata = { title: "Employees" };
 
 export default async function EmployeesPage() {
-  await requireUser(["hr"]);
-  const db = await getDb();
-  const year = (await getPolicy(db)).activeYear;
-  const users = await listUsers(db);
+  const [, db] = await Promise.all([requireUser(["hr"]), getDb()]);
+  const [policy, users, departments, offices, categories] = await Promise.all([
+    getPolicy(db), listUsers(db), getDepartments(db), getOffices(db), getCategories(db),
+  ]);
+  const year = policy.activeYear;
   const contexts = await loadContextBatch(db, year, users);
   const rows: EmployeeRow[] = users.map((u) => {
     const c = contexts.get(u.id)!;
@@ -24,5 +25,5 @@ export default async function EmployeesPage() {
       requests: c.requests.slice(0, 5).map((r) => ({ id: r.id, start: r.start, end: r.end, days: r.days, status: r.status })),
     };
   });
-  return <EmployeesView year={year} users={rows} departments={await getDepartments(db)} offices={await getOffices(db)} categories={await getCategories(db)} />;
+  return <EmployeesView year={year} users={rows} departments={departments} offices={offices} categories={categories} />;
 }

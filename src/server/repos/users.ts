@@ -59,6 +59,12 @@ export async function getUser(db: DB, id: number): Promise<User | undefined> {
   return r && map(r);
 }
 
+/** The signed-in user for a session token hash, in one query (session + user + labels). */
+export async function getUserBySession(db: DB, tokenHash: string, now: string): Promise<User | undefined> {
+  const r = await get<UserRow>(db, `${SELECT} JOIN sessions s ON s.user_id = u.id WHERE s.token_hash = ? AND s.expires_at > ? AND u.active = 1`, tokenHash, now);
+  return r && map(r);
+}
+
 export function findLogin(db: DB, login: string) {
   return get<UserRow & { password_hash: string; failed_logins: number }>(
     db, `${SELECT} WHERE lower(u.employee_id) = lower(?) OR lower(u.email) = lower(?)`, login.trim(), login.trim(),

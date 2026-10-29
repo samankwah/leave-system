@@ -8,18 +8,20 @@ import PolicyView from "./PolicyView";
 export const metadata: Metadata = { title: "Policy settings" };
 
 export default async function PolicyPage() {
-  await requireUser(["hr"]);
-  const db = await getDb();
-  const users = await listUsers(db, { activeOnly: true });
+  const [, db] = await Promise.all([requireUser(["hr"]), getDb()]);
+  const [users, rows, policy, categories, holidays, departments, offices, routes] = await Promise.all([
+    listUsers(db, { activeOnly: true }), getPolicyRows(db), getPolicy(db), getCategories(db), getHolidays(db),
+    getDepartments(db), getOffices(db), getRoutes(db),
+  ]);
   return (
     <PolicyView
-      rows={await getPolicyRows(db)}
-      activeYear={(await getPolicy(db)).activeYear}
-      categories={await getCategories(db)}
-      holidays={await getHolidays(db)}
-      departments={await getDepartments(db)}
-      offices={await getOffices(db)}
-      routes={await getRoutes(db)}
+      rows={rows}
+      activeYear={policy.activeYear}
+      categories={categories}
+      holidays={holidays}
+      departments={departments}
+      offices={offices}
+      routes={routes}
       approvers={users.filter((u) => u.role === "manager" || u.role === "hr").map((u) => ({ id: u.id, name: u.fullName }))}
       employees={users.map((u) => ({ id: u.id, name: u.fullName }))}
     />

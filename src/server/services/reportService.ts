@@ -69,8 +69,7 @@ export async function runReport(db: DB, actor: User, key: string, year: number):
     }
     case "upcoming-by-month": {
       const today = todayIso();
-      const rows = (await listRequests(db, { status: ["approved", "pending"] }))
-        .filter((r) => r.end >= today && r.year === year)
+      const rows = (await listRequests(db, { status: ["approved", "pending"], year, endFrom: today }))
         .flatMap((r) => Object.entries(r.breakdown).map(([m, d]) => ({ month: m, monthLabel: monthLabel(m), name: r.employeeName, dates: formatRange(r), days: d, status: r.status })))
         .sort((a, b) => a.month.localeCompare(b.month) || a.name.localeCompare(b.name));
       return { ...base, columns: [col("monthLabel", "Month"), col("name", "Employee"), col("dates", "Request dates"), col("days", "Working days in month"), col("status", "Status")], rows };

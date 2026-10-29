@@ -32,7 +32,14 @@ function iconFor(kind: string): [React.ReactNode, string] {
   return [<NotificationsNoneOutlinedIcon key="i" />, "primary.main"];
 }
 
-export default function NotificationList({ items, today }: { items: Notification[]; today: string }) {
+const PAGE = 50;
+
+export default function NotificationList({ items: initial, today }: { items: Notification[]; today: string }) {
+  // Older notifications are fetched page by page (cursor = oldest loaded id) instead of all at once.
+  const [older, setOlder] = useState<Notification[]>([]);
+  const [hasMore, setHasMore] = useState(initial.length >= PAGE);
+  const [loadingMore, setLoadingMore] = useState(false);
+  const items = [...initial, ...older.filter((o) => !initial.some((i) => i.id === o.id))];
   const router = useRouter();
   const [tab, setTab] = useState<"all" | "unread">("all");
   const unread = items.filter((n) => !n.read_at).length;
@@ -43,6 +50,19 @@ export default function NotificationList({ items, today }: { items: Notification
     const d = n.created_at.slice(0, 10);
     const label = d === today ? "Today" : d === yesterday ? "Yesterday" : fmtLongDate(d);
     groups.set(label, [...(groups.get(label) ?? []), n]);
+  }
+
+  async function loadOlder() {
+    const oldest = items[items.length - 1];
+    if (!oldest) return;
+    setLoadingMore(true);
+    try {
+      const page = await api<Notification[]>(`/api/notifications?before=${oldest.id}&limit=${PAGE}`, "GET");
+      setOlder((o) => [...o, ...page]);
+      setHasMore(page.length === PAGE);
+    } finally {
+      setLoadingMore(false);
+    }
   }
 
   async function read(ids?: number[]) {
@@ -60,7 +80,7 @@ export default function NotificationList({ items, today }: { items: Notification
       <PageHeader title="Notifications" subtitle={unread ? `${unread} unread` : "You're all caught up"}
         actions={unread > 0 && <Button variant="outlined" startIcon={<DoneAllIcon />} onClick={() => read()}>Mark all as read</Button>} />
       <Tabs value={tab} onChange={(_, v) => setTab(v)} sx={{ mb: 2.5 }}>
-        <Tab value="all" label={`All ${items.length}`} />
+        <Tab value="all" label={hasMore ? "All" : `All ${items.length}`} />
         <Tab value="unread" label={`Unread ${unread}`} />
       </Tabs>
       {shown.length === 0 ? (
@@ -96,6 +116,11 @@ export default function NotificationList({ items, today }: { items: Notification
             </Box>
           ))}
         </Stack>
+      )}
+      {hasMore && (
+        <Box sx={{ textAlign: "center", mt: 2.5 }}>
+          <Button onClick={loadOlder} disabled={loadingMore}>{loadingMore ? "Loading…" : "Load older notifications"}</Button>
+        </Box>
       )}
     </>
   );

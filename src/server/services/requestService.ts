@@ -2,7 +2,7 @@ import { hasReservation } from "@/domain/capacity";
 import { analyseRequest, hasErrors, type RequestAnalysis } from "@/domain/requestRules";
 import type { Allocation, Period } from "@/domain/types";
 import { formatRange, isValidISO, yearOf } from "@/domain/workingDays";
-import { nowIso, todayIso, tx, type DB } from "../db";
+import { capKeys, empKey, lockKeys, nowIso, todayIso, tx, type DB } from "../db";
 import { badRequest, forbidden, notFound, rejected } from "../errors";
 import { audit } from "../repos/audit";
 import { getPolicy } from "../repos/settings";
@@ -13,7 +13,7 @@ import { notify } from "../repos/notifications";
 import type { User } from "../repos/users";
 import { loadEmployeeContext } from "./context";
 import { approverRecipients, assertCanDecide, notifyIfMonthsFull, resolveApprover } from "./workflow";
-import type { Decision } from "./planService";
+import { monthsOfPeriods, type Decision } from "./planService";
 
 const actorOf = (u: User) => ({ id: u.id, name: u.fullName });
 
@@ -85,6 +85,7 @@ export async function submitRequest(db: DB, actor: User, input: RequestInput, at
   await validateInput(db, input);
   const file = checkAttachment(attachment);
   return tx(db, async (db) => {
+    await lockKeys(db, [empKey(actor.id), ...capKeys(monthsOfPeriods([input]))]);
     const analysis = await analyseRequestFor(db, actor.id, input, "submit");
     if (hasErrors(analysis.issues)) throw rejected(analysis.issues, "The leave request cannot be submitted until these issues are resolved.");
     const year = yearOf(input.start);
@@ -111,6 +112,7 @@ export async function resubmitRequest(db: DB, actor: User, id: number, input: Re
   await validateInput(db, input);
   const file = checkAttachment(attachment);
   return tx(db, async (db) => {
+    await lockKeys(db, [empKey(actor.id), ...capKeys(monthsOfPeriods([input]))]);
     const req = await getRequest(db, id);
     if (!req) throw notFound("Leave request");
     if (req.employeeId !== actor.id) throw forbidden("You can only edit your own requests.");
@@ -136,6 +138,9 @@ export async function resubmitRequest(db: DB, actor: User, id: number, input: Re
 
 export function cancelRequest(db: DB, actor: User, id: number, reason: string): Promise<LeaveRequest> {
   return tx(db, async (db) => {
+    const pre = await getRequest(db, id);
+    if (!pre) throw notFound("Leave request");
+    await lockKeys(db, [empKey(pre.employeeId)]);
     const req = await getRequest(db, id);
     if (!req) throw notFound("Leave request");
     const own = req.employeeId === actor.id;
@@ -154,6 +159,9 @@ export function cancelRequest(db: DB, actor: User, id: number, reason: string): 
 
 export function decideRequest(db: DB, actor: User, id: number, decision: Decision, reason: string): Promise<LeaveRequest> {
   return tx(db, async (db) => {
+    const pre = await getRequest(db, id);
+    if (!pre) throw notFound("Leave request");
+    await lockKeys(db, [empKey(pre.employeeId), ...(decision === "approve" ? capKeys(monthsOfPeriods([pre])) : [])]);
     const req = await getRequest(db, id);
     if (!req) throw notFound("Leave request");
     assertCanDecide(actor, req);

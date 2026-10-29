@@ -3,10 +3,10 @@ import { analysePlan } from "@/domain/planRules";
 import { analyseRequest } from "@/domain/requestRules";
 import type { Allocation, Issue, MonthKey, MonthOccupancy } from "@/domain/types";
 import { formatRange, yearMonths } from "@/domain/workingDays";
-import type { DB } from "../db";
+import { get, type DB } from "../db";
 import { auditFor } from "../repos/audit";
-import { listAllocations, listPlans, listRequests, type LeaveRequest, type Plan } from "../repos/leave";
-import { getPolicy, getHolidays } from "../repos/settings";
+import { listPlans, listRequests, type LeaveRequest, type Plan } from "../repos/leave";
+import { getHolidays } from "../repos/settings";
 import { listUsers, type User } from "../repos/users";
 import { loadContextBatch, loadEmployeeContext, type EmployeeContext } from "./context";
 
@@ -15,70 +15,98 @@ export function approvalScope(user: User) {
   return user.role === "hr" ? {} : { approverId: user.id };
 }
 
-/** "Needs your attention" figures for the dashboard (managers and HR). */
-export async function attentionSummary(db: DB, user: User, year: number, today: string) {
+/**
+ * Pending (and overdue) approval counts for a manager's queue or the HR pool, in a single COUNT
+ * query. The layout shows this badge on every page, so it must not hydrate plans or requests.
+ */
+export async function approvalCounts(db: DB, user: User, overdueBefore?: string): Promise<{ pending: number; overdue: number }> {
+  if (user.role !== "manager" && user.role !== "hr") return { pending: 0, overdue: 0 };
+  const scoped = user.role !== "hr";
+  const scope = scoped ? "AND approver_id = ?" : "";
+  const p = (extra: (string | number)[] = []) => [user.id, ...(scoped ? [user.id] : []), ...extra];
+  const before = overdueBefore ?? "0000";
+  const r = await get<{ pending: number; overdue: number }>(
+    db,
+    `SELECT
+       ((SELECT COUNT(*) FROM master_plans WHERE status = 'submitted' AND employee_id <> ? ${scope})
+      + (SELECT COUNT(*) FROM leave_requests WHERE status = 'pending' AND employee_id <> ? ${scope}))::int AS pending,
+       ((SELECT COUNT(*) FROM master_plans WHERE status = 'submitted' AND employee_id <> ? ${scope} AND submitted_at < ?)
+      + (SELECT COUNT(*) FROM leave_requests WHERE status = 'pending' AND employee_id <> ? ${scope} AND submitted_at < ?))::int AS overdue`,
+    ...p(), ...p(), ...p([before]), ...p([before]),
+  );
+  return { pending: r?.pending ?? 0, overdue: overdueBefore ? r?.overdue ?? 0 : 0 };
+}
+
+export async function pendingApprovalCount(db: DB, user: User): Promise<number> {
+  return (await approvalCounts(db, user)).pending;
+}
+
+/** "Needs your attention" figures for the dashboard; reuses the already-loaded context (policy, allocations). */
+export async function attentionSummary(db: DB, user: User, ctx: Pick<EmployeeContext, "policy" | "allocations" | "today" | "year">) {
   if (user.role !== "manager" && user.role !== "hr") return null;
-  const scope = approvalScope(user);
-  const [policy, plans, requests, allocations] = await Promise.all([
-    getPolicy(db),
-    listPlans(db, { ...scope, status: ["submitted"] }),
-    listRequests(db, { ...scope, status: ["pending"] }),
-    listAllocations(db, year),
-  ]);
-  const items = [...plans, ...requests].filter((i) => i.employeeId !== user.id);
-  const overdue = items.filter((i) => i.submittedAt && (Date.parse(today) - Date.parse(i.submittedAt.slice(0, 10))) / 86_400_000 > policy.overdueApprovalDays).length;
-  const occ = computeOccupancy(allocations, yearMonths(year), policy.monthlyCapacity, policy.restrictedMonths);
+  const cutoff = new Date(Date.parse(ctx.today) - ctx.policy.overdueApprovalDays * 86_400_000).toISOString().slice(0, 10);
+  const counts = await approvalCounts(db, user, cutoff);
+  const occ = computeOccupancy(ctx.allocations, yearMonths(ctx.year), ctx.policy.monthlyCapacity, ctx.policy.restrictedMonths);
   return {
-    pending: items.length,
-    overdue,
+    pending: counts.pending,
+    overdue: counts.overdue,
     fullMonths: Object.values(occ).filter((o) => o.status === "full").map((o) => o.month),
   };
 }
 
-export async function pendingApprovalCount(db: DB, user: User): Promise<number> {
-  if (user.role !== "manager" && user.role !== "hr") return 0;
-  const scope = approvalScope(user);
-  const [plans, requests] = await Promise.all([
-    listPlans(db, { ...scope, status: ["submitted"] }),
-    listRequests(db, { ...scope, status: ["pending"] }),
-  ]);
-  return [...plans, ...requests].filter((i) => i.employeeId !== user.id).length;
-}
-
 /**
- * Allocations safe to send to an employee's browser: other employees are replaced by anonymous
- * negative ids so client-side previews can run the same capacity rules without revealing who is on leave.
+ * Allocations safe (and compact) to send to an employee's browser. Other employees collapse to one
+ * anonymous entry per person per month (negative ids, not linked across months), so client-side
+ * previews run the same capacity rules without revealing who is on leave. Size is bounded by the
+ * monthly capacity, not the size of the organisation.
  */
 export function anonymisedAllocations(allocations: Allocation[], selfId: number): Allocation[] {
-  const alias = new Map<number, number>();
-  return allocations.map((a) => {
-    if (a.employeeId === selfId) return a;
-    if (!alias.has(a.employeeId)) alias.set(a.employeeId, -(alias.size + 1));
-    return { ...a, employeeId: alias.get(a.employeeId)!, sourceId: 0 };
+  const own = allocations.filter((a) => a.employeeId === selfId);
+  const others = new Map<string, Allocation>();
+  for (const a of allocations) {
+    if (a.employeeId === selfId || a.days <= 0) continue;
+    const k = `${a.month}|${a.employeeId}`;
+    const prev = others.get(k);
+    others.set(k, { ...a, approved: a.approved || !!prev?.approved, days: (prev?.days ?? 0) + a.days });
+  }
+  const perMonth = new Map<string, number>();
+  const anon = [...others.values()].map((a) => {
+    const n = (perMonth.get(a.month) ?? 0) + 1;
+    perMonth.set(a.month, n);
+    return { ...a, employeeId: -n, sourceType: "plan" as const, sourceId: 0 };
   });
+  return [...own, ...anon];
 }
 
-/** Everything the plan editor, request form and calendar need for instant client-side validation. */
-export async function calendarData(db: DB, user: User, year: number) {
-  const [ctx, holidays] = await Promise.all([loadEmployeeContext(db, user.id, year), getHolidays(db)]);
+/** Builds the client calendar payload from an already-loaded context (no extra queries beyond holidays). */
+export function calendarDataFrom(ctx: EmployeeContext, holidays: { date: string; name: string }[]) {
   const policy = ctx.policy;
   return {
-    year,
+    year: ctx.year,
     today: ctx.today,
-    employeeId: user.id,
+    employeeId: ctx.user.id,
     entitlement: ctx.entitlement,
     restrictedMonths: policy.restrictedMonths,
     capacity: policy.monthlyCapacity,
     leaveTypes: policy.leaveTypes,
     holidays: holidays.map((h) => ({ date: h.date, name: h.name })),
-    allocations: anonymisedAllocations(ctx.allocations, user.id),
-    occupancy: occupancyCounts(computeOccupancy(ctx.allocations, yearMonths(year), policy.monthlyCapacity, policy.restrictedMonths)),
+    allocations: anonymisedAllocations(ctx.allocations, ctx.user.id),
+    occupancy: occupancyCounts(computeOccupancy(ctx.allocations, yearMonths(ctx.year), policy.monthlyCapacity, policy.restrictedMonths)),
     approvedPlan: ctx.approvedPlan ? { id: ctx.approvedPlan.id, version: ctx.approvedPlan.version, periods: ctx.approvedPlan.periods, monthly: ctx.approvedPlan.monthly } : null,
     requests: ctx.requests.map((r) => ({ id: r.id, start: r.start, end: r.end, status: r.status, days: r.days })),
     balance: ctx.balance,
   };
 }
-export type CalendarData = Awaited<ReturnType<typeof calendarData>>;
+
+/**
+ * Everything the plan editor, request form and calendar need for instant client-side validation.
+ * Holidays are limited to the year shown (plus the first days of the next, for December/January views).
+ */
+export async function calendarData(db: DB, user: User, year: number) {
+  const [ctx, holidays] = await Promise.all([loadEmployeeContext(db, user.id, year), getHolidays(db, year)]);
+  return calendarDataFrom(ctx, holidays);
+}
+export type CalendarData = ReturnType<typeof calendarDataFrom>;
 
 /** Strip occupancy to counts only (no employee ids) for employee-facing pages. */
 export function occupancyCounts(occ: Record<MonthKey, MonthOccupancy>) {
@@ -106,39 +134,35 @@ export interface QueueItem {
 }
 
 /**
- * The approvals inbox. Rule checks run in memory against batched per-year contexts — the same
- * domain functions the services use — so the page needs a fixed number of queries, not several per item.
+ * The approvals inbox. Rule checks run in memory against batched per-year contexts, using the same
+ * domain functions the services use, so the page needs a fixed number of queries rather than several per item.
+ * `view: "pending"` builds the decision queue; `view: "decided"` the 50 most recent decisions (limited in SQL).
  */
-export async function approvalQueue(db: DB, user: User): Promise<{ pending: QueueItem[]; decided: QueueItem[] }> {
+export async function approvalQueue(db: DB, user: User, view: "pending" | "decided" = "pending"): Promise<QueueItem[]> {
   const scope = approvalScope(user);
-  const notMine = <T extends { employeeId: number }>(x: T) => x.employeeId !== user.id;
-  const decidedFilter = <T extends { decidedBy: number | null; employeeId: number }>(x: T) =>
-    x.decidedBy !== null && (user.role === "hr" || x.decidedBy === user.id) && x.employeeId !== user.id;
-
-  const [allUsers, pendingPlans, pendingReqs, decidedPlans, decidedReqs] = await Promise.all([
+  const decidedScope = user.role === "hr" ? {} : { decidedBy: user.id };
+  const [allUsers, plans, reqs] = await Promise.all([
     listUsers(db),
-    listPlans(db, { ...scope, status: ["submitted"] }),
-    listRequests(db, { ...scope, status: ["pending"] }),
-    listPlans(db, { status: ["approved", "rejected", "returned", "superseded"] }),
-    listRequests(db, { status: ["approved", "rejected", "returned", "cancelled"] }),
+    view === "pending"
+      ? listPlans(db, { ...scope, status: ["submitted"], notEmployeeId: user.id })
+      : listPlans(db, { ...decidedScope, decided: true, status: ["approved", "rejected", "returned", "superseded"], notEmployeeId: user.id, limit: 50 }),
+    view === "pending"
+      ? listRequests(db, { ...scope, status: ["pending"], notEmployeeId: user.id })
+      : listRequests(db, { ...decidedScope, decided: true, status: ["approved", "rejected", "returned", "cancelled"], notEmployeeId: user.id, limit: 50 }),
   ]);
-  const byDecision = (x: { decidedAt: string | null }) => x.decidedAt ?? "";
-  const plansIn = [...pendingPlans.filter(notMine).map((p) => ({ p, pending: true })),
-    ...decidedPlans.filter(decidedFilter).sort((a, b) => byDecision(b).localeCompare(byDecision(a))).slice(0, 50).map((p) => ({ p, pending: false }))];
-  const reqsIn = [...pendingReqs.filter(notMine).map((r) => ({ r, pending: true })),
-    ...decidedReqs.filter(decidedFilter).sort((a, b) => byDecision(b).localeCompare(byDecision(a))).slice(0, 50).map((r) => ({ r, pending: false }))];
+  const analyse = view === "pending";
 
   const users = new Map(allUsers.map((u) => [u.id, u]));
-  const years = [...new Set([...plansIn.map((x) => x.p.year), ...reqsIn.map((x) => x.r.year)])];
+  const years = [...new Set([...plans.map((p) => p.year), ...reqs.map((r) => r.year)])];
   const [contexts, planHistory, reqHistory, previousPlans] = await Promise.all([
     Promise.all(years.map(async (y) => [y, await loadContextBatch(db, y, allUsers)] as const)).then((e) => new Map(e)),
-    auditFor(db, "plan", plansIn.map((x) => x.p.id)),
-    auditFor(db, "request", reqsIn.map((x) => x.r.id)),
-    Promise.all(plansIn.filter((x) => x.p.amendsPlanId).map(async (x) => (await listPlans(db, { employeeId: x.p.employeeId, year: x.p.year })).find((q) => q.id === x.p.amendsPlanId))),
+    auditFor(db, "plan", plans.map((p) => p.id)),
+    auditFor(db, "request", reqs.map((r) => r.id)),
+    Promise.all(plans.filter((p) => p.amendsPlanId).map(async (p) => (await listPlans(db, { employeeId: p.employeeId, year: p.year })).find((q) => q.id === p.amendsPlanId))),
   ]);
   const prevById = new Map(previousPlans.filter((p): p is Plan => !!p).map((p) => [p.id, p]));
 
-  const build = (kind: "plan" | "request", p: Plan | undefined, r: LeaveRequest | undefined, analyse: boolean): QueueItem => {
+  const build = (kind: "plan" | "request", p: Plan | undefined, r: LeaveRequest | undefined): QueueItem => {
     const item = (p ?? r)!;
     const u = users.get(item.employeeId)!;
     const ctx = contexts.get(item.year)!.get(item.employeeId)!;
@@ -196,14 +220,10 @@ export async function approvalQueue(db: DB, user: User): Promise<{ pending: Queu
     };
   };
 
-  const all = [
-    ...plansIn.map((x) => ({ pending: x.pending, item: build("plan", x.p, undefined, x.pending) })),
-    ...reqsIn.map((x) => ({ pending: x.pending, item: build("request", undefined, x.r, x.pending) })),
-  ];
-  const pending = all.filter((x) => x.pending).map((x) => x.item).sort((a, b) => a.submittedAt.localeCompare(b.submittedAt));
+  const items = [...plans.map((p) => build("plan", p, undefined)), ...reqs.map((r) => build("request", undefined, r))];
+  if (view === "pending") return items.sort((a, b) => a.submittedAt.localeCompare(b.submittedAt));
   const decidedAt = (i: QueueItem) => (i.plan?.decidedAt ?? i.request?.decidedAt ?? "") as string;
-  const decided = all.filter((x) => !x.pending).map((x) => x.item).sort((a, b) => decidedAt(b).localeCompare(decidedAt(a))).slice(0, 50);
-  return { pending, decided };
+  return items.sort((a, b) => decidedAt(b).localeCompare(decidedAt(a))).slice(0, 50);
 }
 
 export interface WallchartData {

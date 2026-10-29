@@ -2,9 +2,9 @@
 
 import { useMemo, useState } from "react";
 import Box from "@mui/material/Box";
+import Button from "@mui/material/Button";
 import Stack from "@mui/material/Stack";
 import TextField from "@mui/material/TextField";
-import Tooltip from "@mui/material/Tooltip";
 import Typography from "@mui/material/Typography";
 import type { MonthKey } from "@/domain/types";
 import { formatDate, monthNumber, parseISO, toISO, yearOf } from "@/domain/workingDays";
@@ -17,6 +17,7 @@ const KIND = {
   "plan-pending": { label: "Plan awaiting approval", bg: "leave.planned" },
 } as const;
 const PRIORITY = ["approved", "pending", "plan", "plan-pending"] as const;
+const PAGE = 40;
 
 /**
  * Team wallchart (Timetastic/Breathe style): one row per person, one column per day of the month.
@@ -26,10 +27,18 @@ export default function Wallchart({ data, month, holidays, today, restricted }: 
   data: WallchartData; month: MonthKey; holidays: Map<string, string>; today: string; restricted: boolean;
 }) {
   const [q, setQ] = useState("");
-  const y = yearOf(month);
-  const m = monthNumber(month);
-  const days = Array.from({ length: new Date(Date.UTC(y, m, 0)).getUTCDate() }, (_, i) => toISO(Date.UTC(y, m - 1, i + 1)));
-  const people = data.employees.filter((e) => `${e.name} ${e.department}`.toLowerCase().includes(q.toLowerCase()));
+  const [limit, setLimit] = useState(PAGE);
+  const days = useMemo(() => {
+    const y = yearOf(month);
+    const m = monthNumber(month);
+    return Array.from({ length: new Date(Date.UTC(y, m, 0)).getUTCDate() }, (_, i) => toISO(Date.UTC(y, m - 1, i + 1)));
+  }, [month]);
+  const matching = useMemo(
+    () => data.employees.filter((e) => `${e.name} ${e.department}`.toLowerCase().includes(q.toLowerCase())),
+    [data.employees, q],
+  );
+  // Rows render incrementally: a large organisation never mounts thousands of rows at once.
+  const people = matching.slice(0, limit);
 
   const byPerson = useMemo(() => {
     const map = new Map<number, Map<string, (typeof PRIORITY)[number]>>();
@@ -47,7 +56,7 @@ export default function Wallchart({ data, month, holidays, today, restricted }: 
   }, [data.spans, days]);
 
   const isOff = (d: string) => { const w = new Date(parseISO(d)).getUTCDay(); return w === 0 || w === 6 || holidays.has(d); };
-  const offCount = (d: string) => people.filter((p) => { const k = byPerson.get(p.id)?.get(d); return k === "approved" || k === "pending"; }).length;
+  const offCount = (d: string) => matching.filter((p) => { const k = byPerson.get(p.id)?.get(d); return k === "approved" || k === "pending"; }).length;
   const anyone = people.some((p) => byPerson.get(p.id)?.size);
   const nameCol = 180;
 
@@ -68,7 +77,7 @@ export default function Wallchart({ data, month, holidays, today, restricted }: 
       <Box sx={{ overflowX: "auto", border: 1, borderColor: "divider", borderRadius: 2 }}>
         <Box sx={{ display: "grid", gridTemplateColumns: `${nameCol}px repeat(${days.length}, minmax(26px, 1fr))`, minWidth: nameCol + days.length * 26 }}>
           <Box sx={{ position: "sticky", left: 0, zIndex: 2, bgcolor: "background.paper", borderBottom: 1, borderColor: "divider", px: 1.5, py: 1 }}>
-            <Typography variant="caption" sx={{ fontWeight: 700, color: "text.secondary" }}>{people.length} people</Typography>
+            <Typography variant="caption" sx={{ fontWeight: 700, color: "text.secondary" }}>{matching.length} people</Typography>
           </Box>
           {days.map((d) => (
             <Box key={d} sx={{
@@ -95,15 +104,13 @@ export default function Wallchart({ data, month, holidays, today, restricted }: 
                 return (
                   <Box key={d} sx={{ borderBottom: 1, borderColor: "divider", bgcolor: off ? "leave.weekend" : undefined, py: "6px", display: "flex" }}>
                     {k && (
-                      <Tooltip title={`${p.name} · ${formatDate(d)} · ${KIND[k].label}${off ? " (non-working day)" : ""}`}>
-                        <Box sx={{
+                        <Box title={`${p.name} · ${formatDate(d)} · ${KIND[k].label}${off ? " (non-working day)" : ""}`} sx={{
                           flex: 1, ml: joinLeft ? 0 : "2px", mr: joinRight ? 0 : "2px", opacity: off ? 0.45 : 1,
                           borderTopLeftRadius: joinLeft ? 0 : 6, borderBottomLeftRadius: joinLeft ? 0 : 6,
                           borderTopRightRadius: joinRight ? 0 : 6, borderBottomRightRadius: joinRight ? 0 : 6,
                           bgcolor: KIND[k].bg, borderStyle: k === "plan-pending" ? "dashed" : "none", borderWidth: "1.5px 0",
                           borderColor: "leave.plannedText",
                         }} />
-                      </Tooltip>
                     )}
                   </Box>
                 );
@@ -123,6 +130,11 @@ export default function Wallchart({ data, month, holidays, today, restricted }: 
           })}
         </Box>
       </Box>
+      {matching.length > people.length && (
+        <Box sx={{ textAlign: "center", mt: 1.5 }}>
+          <Button onClick={() => setLimit((l) => l + PAGE)}>Show {Math.min(PAGE, matching.length - people.length)} more of {matching.length - people.length}</Button>
+        </Box>
+      )}
       {!anyone && <Typography variant="body2" color="text.secondary" sx={{ mt: 1.5 }}>Nobody in this view has leave planned or booked this month.</Typography>}
     </Box>
   );

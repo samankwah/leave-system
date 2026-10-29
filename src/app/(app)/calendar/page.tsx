@@ -8,21 +8,20 @@ import CalendarView from "./CalendarView";
 export const metadata: Metadata = { title: "Calendar" };
 
 export default async function CalendarPage({ searchParams }: { searchParams: Promise<{ year?: string; month?: string; view?: string }> }) {
-  const user = await requireUser();
-  const db = await getDb();
-  const sp = await searchParams;
+  const [user, db, sp] = await Promise.all([requireUser(), getDb(), searchParams]);
   const policy = await getPolicy(db);
   const month = /^\d{4}-\d{2}$/.test(sp.month ?? "") ? sp.month! : undefined;
   const year = Number(sp.year) || (month ? Number(month.slice(0, 4)) : policy.activeYear);
   const showTeam = user.role === "manager" || user.role === "hr";
+  const [data, team] = await Promise.all([calendarData(db, user, year), showTeam ? wallchart(db, user, year) : null]);
   return (
     <CalendarView
       key={year}
-      data={await calendarData(db, user, year)}
+      data={data}
       years={[policy.activeYear - 1, policy.activeYear, policy.activeYear + 1]}
       initialMonth={month}
       initialView={showTeam && sp.view === "team" ? "team" : "mine"}
-      team={showTeam ? await wallchart(db, user, year) : null}
+      team={team}
       teamLabel={user.role === "hr" ? "Organisation" : "My team"}
     />
   );

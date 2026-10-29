@@ -1,5 +1,5 @@
 import type { Allocation, MonthKey, Period } from "@/domain/types";
-import { all, get, insert, nowIso, run, type DB } from "../db";
+import { all, get, insert, insertMany, nowIso, run, type DB } from "../db";
 
 export type PlanStatus = "draft" | "submitted" | "approved" | "rejected" | "returned" | "superseded";
 export type RequestStatus = "pending" | "approved" | "rejected" | "returned" | "cancelled";
@@ -50,6 +50,37 @@ export interface LeaveRequest extends Period {
 }
 
 const marks = (n: number) => Array(n).fill("?").join(",");
+
+/** Shared list filters. `decided` restricts to decided items, newest decision first (uses a partial index). */
+export interface ListFilter<S> {
+  employeeId?: number;
+  year?: number;
+  status?: S[];
+  approverId?: number;
+  decidedBy?: number;
+  decided?: boolean;
+  /** Exclude one employee's own items (nobody decides their own leave). */
+  notEmployeeId?: number;
+  /** Requests only: end date on or after this ISO date. */
+  endFrom?: string;
+  limit?: number;
+}
+
+function where<S extends string>(alias: string, f: ListFilter<S>): { sql: string; params: (string | number)[]; order?: string } {
+  const w: string[] = [];
+  const params: (string | number)[] = [];
+  if (f.employeeId) { w.push(`${alias}.employee_id = ?`); params.push(f.employeeId); }
+  if (f.year) { w.push(`${alias}.year = ?`); params.push(f.year); }
+  if (f.approverId) { w.push(`${alias}.approver_id = ?`); params.push(f.approverId); }
+  if (f.decidedBy) { w.push(`${alias}.decided_by = ?`); params.push(f.decidedBy); }
+  if (f.decided) w.push(`${alias}.decided_by IS NOT NULL`);
+  if (f.notEmployeeId) { w.push(`${alias}.employee_id <> ?`); params.push(f.notEmployeeId); }
+  if (f.endFrom) { w.push(`${alias}.end_date >= ?`); params.push(f.endFrom); }
+  if (f.status?.length) { w.push(`${alias}.status IN (${marks(f.status.length)})`); params.push(...f.status); }
+  return { sql: w.length ? `WHERE ${w.join(" AND ")}` : "", params, order: f.decided ? `${alias}.decided_at DESC` : undefined };
+}
+
+const limitSql = (n?: number) => (n ? ` LIMIT ${Math.max(1, Math.floor(n))}` : "");
 
 /* ---------------------------------- plans --------------------------------- */
 
@@ -106,18 +137,10 @@ export async function getPlan(db: DB, id: number): Promise<Plan | undefined> {
   return r && (await hydratePlans(db, [r]))[0];
 }
 
-export async function listPlans(
-  db: DB,
-  f: { employeeId?: number; year?: number; status?: PlanStatus[]; approverId?: number } = {},
-): Promise<Plan[]> {
-  const where: string[] = [];
-  const params: (string | number)[] = [];
-  if (f.employeeId) { where.push("p.employee_id = ?"); params.push(f.employeeId); }
-  if (f.year) { where.push("p.year = ?"); params.push(f.year); }
-  if (f.approverId) { where.push("p.approver_id = ?"); params.push(f.approverId); }
-  if (f.status?.length) { where.push(`p.status IN (${marks(f.status.length)})`); params.push(...f.status); }
-  const sql = `${PLAN_SELECT} ${where.length ? "WHERE " + where.join(" AND ") : ""} ORDER BY p.year DESC, e.full_name, p.version DESC`;
-  return hydratePlans(db, await all<PlanRow>(db, sql, ...params));
+export async function listPlans(db: DB, f: ListFilter<PlanStatus> = {}): Promise<Plan[]> {
+  const w = where("p", f);
+  const sql = `${PLAN_SELECT} ${w.sql} ORDER BY ${w.order ?? "p.year DESC, e.full_name, p.version DESC"}${limitSql(f.limit)}`;
+  return hydratePlans(db, await all<PlanRow>(db, sql, ...w.params));
 }
 
 export async function getApprovedPlan(db: DB, employeeId: number, year: number) {
@@ -154,12 +177,8 @@ export async function replacePlanPeriods(
 ) {
   await run(db, "DELETE FROM plan_periods WHERE plan_id = ?", planId);
   await run(db, "DELETE FROM plan_month_allocations WHERE plan_id = ?", planId);
-  for (const p of periods) {
-    await run(db, "INSERT INTO plan_periods (plan_id, start_date, end_date, working_days) VALUES (?, ?, ?, ?)", planId, p.start, p.end, p.days);
-  }
-  for (const [month, days] of Object.entries(monthly)) {
-    await run(db, "INSERT INTO plan_month_allocations (plan_id, month, days) VALUES (?, ?, ?)", planId, month, days);
-  }
+  await insertMany(db, "plan_periods", ["plan_id", "start_date", "end_date", "working_days"], periods.map((p) => [planId, p.start, p.end, p.days]));
+  await insertMany(db, "plan_month_allocations", ["plan_id", "month", "days"], Object.entries(monthly).map(([m, d]) => [planId, m, d]));
   const total = Object.values(monthly).reduce((a, b) => a + b, 0);
   await run(db, "UPDATE master_plans SET total_days = ?, updated_at = ? WHERE id = ?", total, nowIso(), planId);
 }
@@ -237,18 +256,10 @@ export function getRequestAttachment(db: DB, id: number) {
   );
 }
 
-export async function listRequests(
-  db: DB,
-  f: { employeeId?: number; year?: number; status?: RequestStatus[]; approverId?: number } = {},
-): Promise<LeaveRequest[]> {
-  const where: string[] = [];
-  const params: (string | number)[] = [];
-  if (f.employeeId) { where.push("r.employee_id = ?"); params.push(f.employeeId); }
-  if (f.year) { where.push("r.year = ?"); params.push(f.year); }
-  if (f.approverId) { where.push("r.approver_id = ?"); params.push(f.approverId); }
-  if (f.status?.length) { where.push(`r.status IN (${marks(f.status.length)})`); params.push(...f.status); }
-  const sql = `${REQ_SELECT} ${where.length ? "WHERE " + where.join(" AND ") : ""} ORDER BY r.start_date DESC`;
-  return hydrateRequests(db, await all<RequestRow>(db, sql, ...params));
+export async function listRequests(db: DB, f: ListFilter<RequestStatus> = {}): Promise<LeaveRequest[]> {
+  const w = where("r", f);
+  const sql = `${REQ_SELECT} ${w.sql} ORDER BY ${w.order ?? "r.start_date DESC"}${limitSql(f.limit)}`;
+  return hydrateRequests(db, await all<RequestRow>(db, sql, ...w.params));
 }
 
 export interface StoredAttachment { name: string; type: string; data: Buffer }
@@ -277,9 +288,7 @@ export async function insertRequest(
 
 export async function replaceRequestBreakdown(db: DB, id: number, breakdown: Record<MonthKey, number>) {
   await run(db, "DELETE FROM request_month_breakdown WHERE request_id = ?", id);
-  for (const [month, days] of Object.entries(breakdown)) {
-    await run(db, "INSERT INTO request_month_breakdown (request_id, month, days) VALUES (?, ?, ?)", id, month, days);
-  }
+  await insertMany(db, "request_month_breakdown", ["request_id", "month", "days"], Object.entries(breakdown).map(([m, d]) => [id, m, d]));
 }
 
 export async function updateRequest(db: DB, id: number, fields: Partial<Record<
@@ -301,8 +310,8 @@ export async function listAllocations(db: DB, year?: number): Promise<Allocation
   const rows = await all<{ employee_id: number; month: string; days: number; source_type: "plan" | "request"; source_id: number; approved: number }>(
     db,
     `SELECT v.* FROM v_allocations v JOIN users u ON u.id = v.employee_id
-      WHERE u.active = 1 ${year ? "AND substr(v.month,1,4) = ?" : ""}`,
-    ...(year ? [String(year)] : []),
+      WHERE u.active = 1 ${year ? "AND v.month BETWEEN ? AND ?" : ""}`,
+    ...(year ? [`${year}-01`, `${year}-12`] : []),
   );
   return rows.map((r) => ({
     employeeId: r.employee_id,

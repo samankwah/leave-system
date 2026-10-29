@@ -1,5 +1,5 @@
 import crypto from "node:crypto";
-import { all, get, nowIso, run, tx, type DB } from "../db";
+import { all, get, insertMany, lockKeys, nowIso, run, type DB } from "../db";
 
 export interface Actor { id: number | null; name: string }
 export const SYSTEM_ACTOR: Actor = { id: null, name: "System" };
@@ -18,18 +18,38 @@ export interface AuditEntry {
   hash: string;
 }
 
+type Draft = Omit<AuditEntry, "id" | "hash" | "prev_hash">;
+
 const hashOf = (e: Omit<AuditEntry, "id" | "hash">) =>
   crypto
     .createHash("sha256")
     .update(JSON.stringify([e.ts, e.actor_id, e.actor_name, e.action, e.entity_type, e.entity_id, e.summary, e.details, e.prev_hash]))
     .digest("hex");
 
+const COLUMNS = ["ts", "actor_id", "actor_name", "action", "entity_type", "entity_id", "summary", "details", "prev_hash", "hash"];
+const pending = new WeakMap<DB, Draft[]>();
+
+/** Appends buffered entries to the chain: one lock, one read of the tip, one multi-row insert. */
+async function flush(t: DB, drafts: Draft[]) {
+  await lockKeys(t, ["audit-chain"]);
+  let prev = (await get<{ hash: string }>(t, "SELECT hash FROM audit_log ORDER BY id DESC LIMIT 1"))?.hash ?? "GENESIS";
+  const rows = drafts.map((d) => {
+    const entry = { ...d, prev_hash: prev };
+    prev = hashOf(entry);
+    return [entry.ts, entry.actor_id, entry.actor_name, entry.action, entry.entity_type, entry.entity_id, entry.summary, entry.details, entry.prev_hash, prev];
+  });
+  await insertMany(t, "audit_log", COLUMNS, rows);
+}
+
 /**
- * Appends a hash-chained audit record. The table rejects UPDATE/DELETE via a trigger, and each
- * record's hash covers the previous record's hash, so edits made outside the app are detectable.
- * Runs under the global write lock so concurrent writers can't fork the chain.
+ * Records a hash-chained audit entry. The table rejects UPDATE/DELETE via a trigger, and each
+ * record's hash covers the previous one, so edits made outside the app are detectable.
+ *
+ * Inside a transaction the entry is buffered and appended just before COMMIT, so the global
+ * `audit-chain` lock is held only for that final append — not for the whole business operation.
+ * A rolled-back transaction leaves no audit entry.
  */
-export function audit(
+export async function audit(
   db: DB,
   actor: Actor,
   action: string,
@@ -38,21 +58,23 @@ export function audit(
   summary: string,
   details: Record<string, unknown> = {},
   ts = nowIso(),
-) {
-  return tx(db, async (t) => {
-    const prev = (await get<{ hash: string }>(t, "SELECT hash FROM audit_log ORDER BY id DESC LIMIT 1"))?.hash ?? "GENESIS";
-    const entry = {
-      ts, actor_id: actor.id, actor_name: actor.name, action, entity_type: entityType,
-      entity_id: entityId === null ? null : String(entityId), summary, details: JSON.stringify(details), prev_hash: prev,
-    };
-    await run(
-      t,
-      `INSERT INTO audit_log (ts, actor_id, actor_name, action, entity_type, entity_id, summary, details, prev_hash, hash)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-      entry.ts, entry.actor_id, entry.actor_name, entry.action, entry.entity_type, entry.entity_id, entry.summary,
-      entry.details, entry.prev_hash, hashOf(entry),
-    );
-  });
+): Promise<void> {
+  const draft: Draft = {
+    ts, actor_id: actor.id, actor_name: actor.name, action, entity_type: entityType,
+    entity_id: entityId === null ? null : String(entityId), summary, details: JSON.stringify(details),
+  };
+  if (!db.inTx) {
+    await db.transaction((t) => flush(t, [draft]));
+    return;
+  }
+  let list = pending.get(db);
+  if (!list) {
+    const drafts: Draft[] = [];
+    list = drafts;
+    pending.set(db, drafts);
+    db.beforeCommit((t) => flush(t, drafts));
+  }
+  list.push(draft);
 }
 
 export function listAudit(
@@ -87,12 +109,46 @@ export async function auditFor(db: DB, entityType: string, ids: number[]): Promi
   return out;
 }
 
-export async function verifyAuditChain(db: DB): Promise<{ ok: boolean; checked: number; brokenAt?: number }> {
+export interface ChainCheck { ok: boolean; checked: number; verifiedNow: number; incremental: boolean; brokenAt?: number }
+
+const CHECKPOINT = "audit_checkpoint";
+const BATCH = 2000;
+
+/**
+ * Verifies the hash chain. By default it is incremental: it re-checks the stored checkpoint record
+ * and then only records added since, so the cost doesn't grow with the size of the log.
+ * `full: true` re-verifies everything from the first record, in batches.
+ */
+export async function verifyAuditChain(db: DB, opts: { full?: boolean } = {}): Promise<ChainCheck> {
+  const cp = opts.full ? undefined : await get<{ value: string }>(db, "SELECT value FROM meta WHERE key = ?", CHECKPOINT);
+  let lastId = 0;
   let prev = "GENESIS";
-  const rows = await all<AuditEntry>(db, "SELECT * FROM audit_log ORDER BY id");
-  for (const r of rows) {
-    if (r.prev_hash !== prev || hashOf(r) !== r.hash) return { ok: false, checked: rows.length, brokenAt: r.id };
-    prev = r.hash;
+  if (cp) {
+    const c = JSON.parse(cp.value) as { id: number; hash: string };
+    const row = await get<AuditEntry>(db, "SELECT * FROM audit_log WHERE id = ?", c.id);
+    const total = (await get<{ c: number }>(db, "SELECT COUNT(*)::int AS c FROM audit_log"))!.c;
+    if (!row || row.hash !== c.hash || hashOf(row) !== row.hash) return { ok: false, checked: total, verifiedNow: 1, incremental: true, brokenAt: c.id };
+    lastId = c.id;
+    prev = c.hash;
   }
-  return { ok: true, checked: rows.length };
+  let verified = 0;
+  for (;;) {
+    const rows = await all<AuditEntry>(db, "SELECT * FROM audit_log WHERE id > ? ORDER BY id LIMIT ?", lastId, BATCH);
+    for (const r of rows) {
+      verified++;
+      if (r.prev_hash !== prev || hashOf(r) !== r.hash) {
+        const total = (await get<{ c: number }>(db, "SELECT COUNT(*)::int AS c FROM audit_log"))!.c;
+        return { ok: false, checked: total, verifiedNow: verified, incremental: !!cp, brokenAt: r.id };
+      }
+      prev = r.hash;
+      lastId = r.id;
+    }
+    if (rows.length < BATCH) break;
+  }
+  if (lastId) {
+    await run(db, "INSERT INTO meta (key, value) VALUES (?, ?) ON CONFLICT (key) DO UPDATE SET value = EXCLUDED.value",
+      CHECKPOINT, JSON.stringify({ id: lastId, hash: prev }));
+  }
+  const total = (await get<{ c: number }>(db, "SELECT COUNT(*)::int AS c FROM audit_log"))!.c;
+  return { ok: true, checked: total, verifiedNow: verified, incremental: !!cp };
 }

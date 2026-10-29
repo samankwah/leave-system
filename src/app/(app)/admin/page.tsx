@@ -11,25 +11,27 @@ import AdminView from "./AdminView";
 export const metadata: Metadata = { title: "User access" };
 
 export default async function AdminPage() {
-  const user = await requireUser(["sysadmin"]);
-  const db = await getDb();
-  const count = async (t: string) => (await get<{ c: number }>(db, `SELECT COUNT(*)::int AS c FROM ${t}`))!.c;
-  const size = await get<{ kb: number }>(db, "SELECT (pg_database_size(current_database()) / 1024)::int AS kb");
-  const users = await listUsers(db);
+  const [user, db] = await Promise.all([requireUser(["sysadmin"]), getDb()]);
+  const [stats, users, sessions, schemaVersion, audit] = await Promise.all([
+    get<{ kb: number; plans: number; requests: number }>(db, `SELECT (pg_database_size(current_database()) / 1024)::int AS kb,
+      (SELECT COUNT(*) FROM master_plans)::int AS plans, (SELECT COUNT(*) FROM leave_requests)::int AS requests`),
+    listUsers(db), listSessions(db, user), getMeta(db, "schema_version"),
+    verifyAuditChain(db), // incremental: only records added since the last verified checkpoint
+  ]);
   return (
     <AdminView
       me={user.id}
       users={users}
-      sessions={await listSessions(db, user)}
+      sessions={sessions}
       system={{
         database: usingNeon() ? `Neon Postgres (${process.env.PGHOST?.replace(/^[^.]+/, "…") ?? "pooled"})` : `PGlite (local) · ${localDataDir()}`,
-        sizeKb: size?.kb ?? 0,
-        schemaVersion: await getMeta(db, "schema_version") ?? "?",
+        sizeKb: stats?.kb ?? 0,
+        schemaVersion: schemaVersion ?? "?",
         activeUsers: users.filter((u) => u.active).length,
         totalUsers: users.length,
-        plans: await count("master_plans"),
-        requests: await count("leave_requests"),
-        audit: await verifyAuditChain(db),
+        plans: stats?.plans ?? 0,
+        requests: stats?.requests ?? 0,
+        audit,
         node: process.version,
       }}
     />

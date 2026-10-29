@@ -9,14 +9,14 @@ import { requireUser } from "@/server/session";
 export const dynamic = "force-dynamic";
 
 export default async function AppLayout({ children }: { children: React.ReactNode }) {
-  const user = await requireUser();
-  const db = await getDb();
-  const collapsed = (await cookies()).get(NAV_COOKIE)?.value === "1";
+  const [user, db, jar] = await Promise.all([requireUser(), getDb(), cookies()]);
+  const collapsed = jar.get(NAV_COOKIE)?.value === "1";
+  const [unread, pendingApprovals] = await Promise.all([unreadCount(db, user.id), pendingApprovalCount(db, user)]);
   return (
     <AppShell
       user={{ fullName: user.fullName, employeeId: user.employeeId, role: user.role, departmentName: user.departmentName }}
-      unread={await unreadCount(db, user.id)}
-      pendingApprovals={await pendingApprovalCount(db, user)}
+      unread={unread}
+      pendingApprovals={pendingApprovals}
       initialCollapsed={collapsed}
     >
       {children}

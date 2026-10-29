@@ -8,13 +8,14 @@ import { requireUser } from "@/server/session";
 import RosterView from "./RosterView";
 
 export default async function RosterPage({ searchParams }: { searchParams: Promise<{ year?: string }> }) {
-  await requireUser(["hr"]);
-  const db = await getDb();
+  const [, db, sp] = await Promise.all([requireUser(["hr"]), getDb(), searchParams]);
   const policy = await getPolicy(db);
-  const year = Number((await searchParams).year) || policy.activeYear;
-  const plans = await listPlans(db, { year });
-  const requests = await listRequests(db, { year, status: ["approved", "pending"] });
-  const rows = (await listUsers(db, { activeOnly: true })).map((u) => {
+  const year = Number(sp.year) || policy.activeYear;
+  const [plans, requests, users, allocations] = await Promise.all([
+    listPlans(db, { year }), listRequests(db, { year, status: ["approved", "pending"] }),
+    listUsers(db, { activeOnly: true }), listAllocations(db, year),
+  ]);
+  const rows = users.map((u) => {
     const approved = plans.find((p) => p.employeeId === u.id && p.status === "approved");
     const working = plans.find((p) => p.employeeId === u.id && ["draft", "submitted", "returned"].includes(p.status));
     const reqs = requests.filter((r) => r.employeeId === u.id);
@@ -33,7 +34,7 @@ export default async function RosterPage({ searchParams }: { searchParams: Promi
       total: approved?.totalDays ?? 0,
     };
   });
-  const occupancy = computeOccupancy(await listAllocations(db, year), yearMonths(year), policy.monthlyCapacity, policy.restrictedMonths);
+  const occupancy = computeOccupancy(allocations, yearMonths(year), policy.monthlyCapacity, policy.restrictedMonths);
   const amendments = plans.filter((p) => p.amendsPlanId || p.status === "superseded").map((p) => ({
     id: p.id, name: p.employeeName, version: p.version, status: p.status, amends: p.amendsPlanId,
     periods: p.periods.map(formatRange).join("; "), days: p.totalDays, decidedBy: p.decidedByName, decidedAt: p.decidedAt, reason: p.decisionReason,

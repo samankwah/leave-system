@@ -1,5 +1,5 @@
 import path from "node:path";
-import { get, type DB } from "./db";
+import { get, lockKeys, type DB } from "./db";
 import { openPg, openPglite } from "./drivers";
 import { DROP_ALL, SCHEMA, SCHEMA_VERSION } from "./schema";
 import { seed } from "./seed";
@@ -14,6 +14,8 @@ export const usingNeon = () => !!process.env.DATABASE_URL;
 /** Creates the schema if needed and loads the synthetic demo data into an empty database. */
 export async function migrate(db: DB): Promise<void> {
   await db.transaction(async (t) => {
+    // Concurrent cold starts on several instances: only one migrates/seeds; the others wait, then no-op.
+    await lockKeys(t, ["migrate"]);
     await t.exec(SCHEMA);
     await t.query("INSERT INTO meta (key, value) VALUES ('schema_version', $1) ON CONFLICT (key) DO UPDATE SET value = EXCLUDED.value", [String(SCHEMA_VERSION)]);
     const users = await get<{ c: number }>(t, "SELECT COUNT(*)::int AS c FROM users");

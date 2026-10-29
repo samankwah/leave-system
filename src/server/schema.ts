@@ -1,4 +1,4 @@
-export const SCHEMA_VERSION = 2;
+export const SCHEMA_VERSION = 3;
 
 const NOW = `to_char(now() AT TIME ZONE 'UTC', 'YYYY-MM-DD"T"HH24:MI:SS.MS"Z"')`;
 
@@ -187,7 +187,29 @@ $$;
 CREATE OR REPLACE TRIGGER audit_log_no_change BEFORE UPDATE OR DELETE ON audit_log
   FOR EACH ROW EXECUTE FUNCTION audit_log_append_only();
 
+-- Sign-in/sign-out events: high volume and routine, so kept out of the hash-chained audit log
+-- (which every audited action must append to in strict order).
+CREATE TABLE IF NOT EXISTS auth_events (
+  id SERIAL PRIMARY KEY,
+  ts TEXT NOT NULL,
+  user_id INTEGER REFERENCES users(id) ON DELETE SET NULL,
+  login TEXT,
+  kind TEXT NOT NULL,
+  user_agent TEXT
+);
+
 CREATE INDEX IF NOT EXISTS idx_plans_emp ON master_plans(employee_id, year);
+CREATE INDEX IF NOT EXISTS idx_plans_status ON master_plans(status, approver_id);
+CREATE INDEX IF NOT EXISTS idx_plans_decided ON master_plans(decided_at DESC) WHERE decided_by IS NOT NULL;
+CREATE INDEX IF NOT EXISTS idx_plan_periods_plan ON plan_periods(plan_id);
+CREATE INDEX IF NOT EXISTS idx_plan_alloc_month ON plan_month_allocations(month);
+CREATE INDEX IF NOT EXISTS idx_requests_status ON leave_requests(status, approver_id);
+CREATE INDEX IF NOT EXISTS idx_requests_decided ON leave_requests(decided_at DESC) WHERE decided_by IS NOT NULL;
+CREATE INDEX IF NOT EXISTS idx_request_breakdown_month ON request_month_breakdown(month);
+CREATE INDEX IF NOT EXISTS idx_sessions_user ON sessions(user_id);
+CREATE INDEX IF NOT EXISTS idx_sessions_expiry ON sessions(expires_at);
+CREATE INDEX IF NOT EXISTS idx_notifications_user_id ON notifications(user_id, id DESC);
+CREATE INDEX IF NOT EXISTS idx_auth_events_user ON auth_events(user_id, ts);
 CREATE INDEX IF NOT EXISTS idx_requests_emp ON leave_requests(employee_id, year);
 CREATE INDEX IF NOT EXISTS idx_notifications_user ON notifications(user_id, read_at);
 CREATE INDEX IF NOT EXISTS idx_audit_entity ON audit_log(entity_type, entity_id);
@@ -197,7 +219,7 @@ CREATE INDEX IF NOT EXISTS idx_audit_ts ON audit_log(ts);
 /** Drops every object this app owns (used by "reset demo data"). */
 export const DROP_ALL = /* sql */ `
 DROP VIEW IF EXISTS v_allocations;
-DROP TABLE IF EXISTS audit_log, notifications, request_month_breakdown, leave_requests, plan_month_allocations,
+DROP TABLE IF EXISTS auth_events, audit_log, notifications, request_month_breakdown, leave_requests, plan_month_allocations,
   plan_periods, master_plans, approval_routes, public_holidays, settings, sessions, users, staff_categories,
   offices, departments, meta CASCADE;
 DROP FUNCTION IF EXISTS audit_log_append_only() CASCADE;

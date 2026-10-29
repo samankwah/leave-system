@@ -9,14 +9,13 @@ import ApprovalsBoard from "./ApprovalsBoard";
 export const metadata: Metadata = { title: "Approvals" };
 
 export default async function ApprovalsPage({ searchParams }: { searchParams: Promise<{ item?: string }> }) {
-  const user = await requireUser(["manager", "hr"]);
-  const db = await getDb();
-  const { pending, decided } = await approvalQueue(db, user);
+  const [user, db, sp] = await Promise.all([requireUser(["manager", "hr"]), getDb(), searchParams]);
+  const [pending, policy] = await Promise.all([approvalQueue(db, user, "pending"), getPolicy(db)]);
   return (
     <ApprovalsBoard
-      pending={pending} decided={decided} isHr={user.role === "hr"}
-      today={todayIso()} overdueDays={(await getPolicy(db)).overdueApprovalDays} restrictedMonths={(await getPolicy(db)).restrictedMonths}
-      initialItem={(await searchParams).item ?? null}
+      pending={pending} isHr={user.role === "hr"}
+      today={todayIso()} overdueDays={policy.overdueApprovalDays} restrictedMonths={policy.restrictedMonths}
+      initialItem={sp.item ?? null}
     />
   );
 }
