@@ -212,15 +212,29 @@ Each month's occupancy is the number of **distinct** employees in it. This gives
 - A pending item that introduces a new month reserves a slot.
 - A slot is released automatically when the employee's last active source for that month is rejected, returned, cancelled or superseded.
 
-**Concurrency.** Each write that checks capacity runs in a Postgres transaction that first takes a transaction-scoped advisory lock (`pg_advisory_xact_lock`). The lock is taken *before* capacity is read, so two simultaneous attempts on the last slot cannot both succeed, even from different serverless instances. A test fires two submissions at once and checks that exactly one wins. Any rule failure rolls back every write in the transaction, including audit records and notifications.
+**Concurrency.** Writes take fine-grained, transaction-scoped advisory locks rather than one global lock:
 
-**Performance.** Employee contexts for reports, HR lists and the approvals queue load in a batch: policy, holidays, allocations, plans and requests are each read once rather than once per employee. Plan periods and request breakdowns are also batch-loaded.
+- **`emp:<id>`** covers one employee's plans, requests and balance.
+- **`cap:<YYYY-MM>`** covers each month whose capacity is affected.
+
+Keys are always acquired in sorted order, so two transactions can't deadlock. Capacity is read only *after* the month locks are held, so two simultaneous attempts on the last slot can't both succeed, even from different serverless instances. Writes for different employees and different months proceed in parallel.
+
+Audit entries are buffered during a transaction and appended to the hash chain in one insert just before COMMIT, under a short `audit-chain` lock. Routine sign-ins go to `auth_events` instead of the chain. Password hashing is asynchronous and runs before any transaction opens. Any rule failure rolls back every write in the transaction, including audit records and notifications.
+
+**Performance.**
+- **Sign-in check:** the signed-in user is resolved once per request with a single joined query.
+- **Approval badge:** a single COUNT query.
+- **Pages:** load their data in at most two parallel rounds and reuse one employee context.
+- **Batching:** reports, HR lists and the approvals queue batch-load contexts, reading each table once rather than once per employee. Plan periods and request breakdowns are also batch-loaded.
+- **On-demand loading:** "Recently decided" approvals are limited in SQL and loaded only when that tab opens. Request histories load when their drawer opens, and notifications page backwards.
+- **Audit verification:** incremental from a checkpoint, with a full re-check available on demand.
+- **Browser payloads:** limited to the selected year, with allocations bounded by monthly capacity rather than headcount.
 
 **Privacy in the browser.** Employees receive capacity *counts* only. Other employees appear as anonymous ids, so the browser preview can run the same rules without revealing who is on leave. Managers see names for their own team; HR sees everyone.
 
 ## Test results
 
-`npm test`: **50 tests passing** (21 domain, 24 service, 5 hardening). They cover:
+`npm test`: **61 tests passing** (21 domain, 26 service, 5 hardening, 9 performance/concurrency). They cover:
 
 - category entitlements and annual balance enforcement
 - long requests that the plan supports
@@ -257,7 +271,7 @@ Each month's occupancy is the number of **distinct** employees in it. This gives
 
 ## Limitations of this prototype
 
-- The global advisory lock serialises all writes. That is ample for one organisation's leave traffic, but a much larger deployment would lock per month instead.
+- The audit hash chain is still a single ordered sequence. Appends are short (one insert at commit), but very high write volumes would need a partitioned or batched chain.
 - Backups use Neon's built-in point-in-time restore. Retention depends on the Neon plan, so confirm it meets GRA's requirements.
 - There is no email or SMS delivery; notifications are in-app only. There is no integration with GRA identity (SSO) or HR/payroll systems.
 - Approval has a single step. A multi-level chain (e.g. manager then HR) would need routes extended into ordered steps.
