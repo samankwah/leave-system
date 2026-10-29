@@ -18,6 +18,7 @@ const child = spawn(process.execPath, [path.join("node_modules", "next", "dist",
     DATABASE_URL_UNPOOLED: "",
     LEAVE_DB_PATH: path.join(dir, "pglite"),
     LEAVE_TODAY: "2026-10-29",
+    NEXT_DIST_DIR: process.env.NEXT_DIST_DIR ?? ".next-build",
   },
 });
 const stop = () => child.kill();

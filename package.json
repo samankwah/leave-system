@@ -10,9 +10,10 @@
     "typecheck": "tsc --noEmit",
     "test": "vitest run",
     "db:reset": "node scripts/reset-db.mjs",
-    "test:e2e": "playwright test flows",
-    "screenshots": "playwright test screenshots",
-    "dev:local": "node scripts/dev-local.mjs"
+    "test:e2e": "npm run build:e2e && playwright test flows",
+    "screenshots": "npm run build:e2e && playwright test screenshots",
+    "dev:local": "node scripts/dev-local.mjs",
+    "build:e2e": "node -e \"process.env.NEXT_DIST_DIR='.next-build';require('child_process').execFileSync(process.execPath,['node_modules/next/dist/bin/next','build'],{stdio:'inherit',env:process.env})\""
   },
   "dependencies": {
     "@electric-sql/pglite": "^0.5.13",

@@ -394,8 +394,16 @@ export function MonthStrip(props: {
   onPick?: (m: MonthKey) => void;
   ownMonths?: Set<MonthKey>;
 }) {
+  // Columns follow the strip's own width (container queries), not the window: the same strip sits in
+  // full-width cards (dashboard) and narrower columns (annual plan) without squeezing or overflowing.
   return (
-    <Box sx={{ display: "grid", gridTemplateColumns: { xs: "repeat(3, 1fr)", sm: "repeat(4, 1fr)", md: "repeat(6, 1fr)", xl: "repeat(12, 1fr)" }, gap: 1 }}>
+    <Box sx={{ containerType: "inline-size" }}>
+    <Box sx={{
+      display: "grid", gap: 1, gridTemplateColumns: "repeat(3, minmax(0, 1fr))",
+      "@container (min-width: 420px)": { gridTemplateColumns: "repeat(4, minmax(0, 1fr))" },
+      "@container (min-width: 600px)": { gridTemplateColumns: "repeat(6, minmax(0, 1fr))" },
+      "@container (min-width: 1080px)": { gridTemplateColumns: "repeat(12, minmax(0, 1fr))" },
+    }}>
       {Array.from({ length: 12 }, (_, i) => {
         const m = monthKey(props.year, i + 1);
         const info = props.occupancy[m];
@@ -411,17 +419,17 @@ export function MonthStrip(props: {
             aria-pressed={selected}
             aria-label={`${monthLabel(m)}: ${restricted ? "restricted" : `${info?.count ?? 0} of ${info?.capacity ?? "?"} employee slots used`}${mine ? `, ${mine} ${props.myLabel ?? "days"}` : ""}`}
             sx={{
-              display: "flex", flexDirection: "column", alignItems: "stretch", textAlign: "left", p: 1.25, gap: 0.75, borderRadius: 2,
+              display: "flex", flexDirection: "column", alignItems: "stretch", textAlign: "left", p: 1.25, gap: 0.75, borderRadius: 2, minWidth: 0,
               border: 1, borderColor: selected ? "primary.main" : "divider", bgcolor: restricted ? "leave.restricted" : "background.paper",
               boxShadow: selected ? (t: Theme) => `0 0 0 1px ${t.vars!.palette.primary.main}` : "none",
               backgroundImage: restricted ? "repeating-linear-gradient(135deg, rgba(127,127,127,.10) 0 2px, transparent 2px 6px)" : undefined,
               transition: "border-color .15s", "&:hover": { borderColor: "primary.main" }, "&.Mui-disabled": { opacity: 1 },
             }}
           >
-            <Stack direction="row" sx={{ justifyContent: "space-between", alignItems: "center" }}>
-              <Typography variant="caption" sx={{ fontWeight: 700, letterSpacing: "0.02em" }}>{MONTH_NAMES[i].slice(0, 3)}</Typography>
-              {restricted ? <LockOutlinedIcon sx={{ fontSize: 13, color: "text.disabled" }} />
-                : full ? <Typography variant="caption" sx={{ fontWeight: 700, color: "error.main", fontSize: 10.5 }}>FULL</Typography> : null}
+            <Stack direction="row" spacing={0.5} sx={{ justifyContent: "space-between", alignItems: "center", minWidth: 0 }}>
+              <Typography variant="caption" noWrap sx={{ fontWeight: 700, letterSpacing: "0.02em" }}>{MONTH_NAMES[i].slice(0, 3)}</Typography>
+              {restricted ? <LockOutlinedIcon sx={{ fontSize: 13, color: "text.disabled", flexShrink: 0 }} />
+                : full ? <Typography variant="caption" noWrap sx={{ fontWeight: 700, color: "error.main", fontSize: 10.5, flexShrink: 0 }}>FULL</Typography> : null}
             </Stack>
             {restricted ? (
               <Typography variant="caption" color="text.disabled" sx={{ lineHeight: "8px", fontSize: 10.5 }}>Restricted</Typography>
@@ -436,6 +444,7 @@ export function MonthStrip(props: {
           </ButtonBase>
         );
       })}
+    </Box>
     </Box>
   );
 }

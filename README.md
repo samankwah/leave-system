@@ -14,7 +14,7 @@ npm test               # unit and service tests (vitest)
 npm run typecheck
 npm run db:reset       # delete the local PGlite data; demo data reloads on next start
 
-# Browser tests (Playwright, Chromium). Run `npm run build` first; they start their own server
+# Browser tests (Playwright, Chromium). They build into .next-build (so a running `npm run dev` is unaffected) and start their own server
 # on port 3100 against a throw-away database with "today" fixed at 2026-10-29.
 npx playwright install chromium   # once
 npm run test:e2e       # end-to-end user journeys
