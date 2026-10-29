@@ -136,7 +136,7 @@ export function StatusChip({ status, label, size = "small" }: { status: string; 
       sx={[
         {
           display: "inline-flex", alignItems: "center", gap: 0.75, px: 1, borderRadius: 1.5, whiteSpace: "nowrap",
-          height: size === "small" ? 22 : 28, fontSize: size === "small" ? 12 : 13, fontWeight: 600, lineHeight: 1,
+          height: size === "small" ? 22 : 28, fontSize: size === "small" ? "0.75rem" : "0.8125rem", fontWeight: 600, lineHeight: 1,
         },
         toneSx(s.tone) as object,
       ]}

@@ -5,6 +5,7 @@ import CalendarMonthOutlinedIcon from "@mui/icons-material/CalendarMonthOutlined
 import DashboardOutlinedIcon from "@mui/icons-material/SpaceDashboardOutlined";
 import EventNoteOutlinedIcon from "@mui/icons-material/EventNoteOutlined";
 import FactCheckOutlinedIcon from "@mui/icons-material/FactCheckOutlined";
+import GroupsOutlinedIcon from "@mui/icons-material/GroupsOutlined";
 import GavelOutlinedIcon from "@mui/icons-material/TuneOutlined";
 import HistoryOutlinedIcon from "@mui/icons-material/HistoryOutlined";
 import ListAltOutlinedIcon from "@mui/icons-material/ListAltOutlined";
@@ -44,7 +45,13 @@ export function navSections(role: Role): { title: string; items: NavItem[] }[] {
     },
   ];
   if (role === "manager" || role === "hr") {
-    sections.push({ title: "Manage", items: [{ href: "/approvals", label: "Approvals", icon: <FactCheckOutlinedIcon />, badgeKey: "approvals", keywords: "approve reject review inbox" }] });
+    sections.push({
+      title: "Manage",
+      items: [
+        { href: "/approvals", label: "Approvals", icon: <FactCheckOutlinedIcon />, badgeKey: "approvals", keywords: "approve reject review inbox" },
+        { href: "/team", label: "Team leave", icon: <GroupsOutlinedIcon />, keywords: "team staff requests plans status workflow" },
+      ],
+    });
   }
   if (role === "hr") {
     sections.push({

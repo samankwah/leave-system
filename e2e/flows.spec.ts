@@ -35,7 +35,7 @@ test("sign in with a demo persona, wrong password, and role redirects", async ({
 
   await page.goto("/hr/policy");
   await expect(page).toHaveURL(/dashboard\?denied=1/);
-  await expect(page.getByText("You don't have access to that page")).toBeVisible();
+  await expect(page.locator("#main").getByText("You don't have access to that page")).toBeVisible();
 
   const res = await page.request.post("/api/requests/1/decision", { data: { decision: "approve" } });
   expect(res.status()).toBe(403);
@@ -184,6 +184,36 @@ test("HR: lowering capacity flags over-capacity months; exports download", async
   done();
 });
 
+test("requests show their workflow; managers and HR see their team's leave", async ({ page }) => {
+  const done = trackConsole(page);
+  await signIn(page, "GRA-7001");
+  await page.goto("/requests");
+  const main = page.locator("#main");
+  await expect(main.getByRole("img", { name: /^Request progress: Submitted, With HR, Decision \(to do\)/ })).toBeVisible();
+
+  await page.goto("/team");
+  await expect(main.getByRole("heading", { name: "Team leave" })).toBeVisible();
+  await expect(main.getByRole("button", { name: /^Kwesi Appiah/ })).toHaveCount(0); // Customs reports to another manager
+  await main.getByRole("button", { name: /^Akosua Boakye, 15 Mar/ }).click();
+  const drawer = page.locator(".MuiDrawer-paper");
+  await expect(drawer.getByText("Workflow")).toBeVisible();
+  await expect(drawer.getByRole("list", { name: /^Request progress/ })).toContainText("Reviewed by Kwame Mensah");
+  await expect(drawer.getByText(/Submitted Annual Leave/)).toBeVisible();
+  await page.screenshot({ path: "e2e/screenshots/drawer-team-request.png" });
+  await drawer.getByRole("button", { name: "Close" }).click();
+  await main.getByRole("tab", { name: /Annual plans/ }).click();
+  await expect(main.getByText("Kwabena Owusu")).toBeVisible();
+
+  await signIn(page, "GRA-8001");
+  await page.goto("/team");
+  await expect(main.getByRole("button", { name: /^Kwesi Appiah/ })).toBeVisible();
+  await main.getByRole("button", { name: /^Kwame Mensah/ }).click();
+  await expect(page.locator(".MuiDrawer-paper").getByRole("link", { name: "Review in Approvals" })).toBeVisible();
+  await page.goto("/requests");
+  await expect(main.getByRole("img", { name: /Reviewed by Comfort Owusu-Ansah, Approved/ })).toBeVisible();
+  done();
+});
+
 test("dark mode choice persists across reloads", async ({ page }) => {
   await signIn(page, "GRA-1002");
   await page.goto("/account");
@@ -200,8 +230,8 @@ test("top bar stays pinned while the page scrolls", async ({ page }) => {
   for (const width of [1440, 390]) {
     await page.setViewportSize({ width, height: 700 });
     await page.goto("/hr/employees");
-    await page.mouse.wheel(0, 1500);
-    await expect.poll(() => page.evaluate(() => window.scrollY)).toBeGreaterThan(300);
+    // Keep scrolling until the page has moved (a single wheel can land before the table has laid out).
+    await expect.poll(async () => { await page.mouse.wheel(0, 600); return page.evaluate(() => window.scrollY); }).toBeGreaterThan(300);
     const top = await page.locator("header").first().evaluate((el) => el.getBoundingClientRect().top);
     expect(top, `top bar at ${width}px`).toBe(0);
   }
@@ -211,7 +241,8 @@ test("phone width: no page scrolls horizontally", async ({ page }) => {
   await page.setViewportSize({ width: 390, height: 844 });
   const pages: Record<string, string[]> = {
     "GRA-1001": ["/dashboard", "/plan", "/requests/new", "/requests", "/calendar", "/notifications", "/account"],
-    "GRA-8001": ["/approvals", "/hr/employees", "/hr/roster", "/hr/reports", "/hr/policy", "/audit", "/calendar?view=team"],
+    "GRA-7001": ["/team", "/requests"],
+    "GRA-8001": ["/approvals", "/team", "/hr/employees", "/hr/roster", "/hr/reports", "/hr/policy", "/audit", "/calendar?view=team"],
     "GRA-9001": ["/admin"],
   };
   for (const [id, paths] of Object.entries(pages)) {

@@ -5,8 +5,9 @@ import { loginAs } from "./helpers";
 const PAGES: Record<string, string[]> = {
   "GRA-1001": ["dashboard", "plan", "requests/new", "requests", "calendar", "notifications", "account"],
   "GRA-1007": ["plan"],
-  "GRA-7002": ["approvals", "calendar"],
-  "GRA-8001": ["approvals", "calendar?view=team", "hr/employees", "hr/roster", "hr/reports", "hr/policy", "audit"],
+  "GRA-7001": ["requests", "team"],
+  "GRA-7002": ["approvals", "calendar", "requests"],
+  "GRA-8001": ["approvals", "team", "requests", "calendar?view=team", "hr/employees", "hr/roster", "hr/reports", "hr/policy", "audit"],
   "GRA-9001": ["admin"],
 };
 

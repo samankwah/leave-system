@@ -64,6 +64,7 @@ interface SeedUser {
 const USERS: SeedUser[] = [
   { key: "sysadmin", employeeId: "GRA-9001", name: "Yaw Boateng", dept: "Information Technology", office: "Head Office – Accra", title: "Systems Administrator", category: "SENIOR", role: "sysadmin" },
   { key: "hr", employeeId: "GRA-8001", name: "Efua Asante", dept: "Human Resource Management", office: "Head Office – Accra", title: "HR Manager", category: "SENIOR", role: "hr" },
+  { key: "hr2", employeeId: "GRA-8002", name: "Comfort Owusu-Ansah", dept: "Human Resource Management", office: "Head Office – Accra", title: "HR Officer", category: "SENIOR", role: "hr" },
   { key: "mgrDt", employeeId: "GRA-7001", name: "Kwame Mensah", dept: "Domestic Tax Revenue Division", office: "Head Office – Accra", title: "Sector Commander", category: "SENIOR", role: "manager" },
   { key: "mgrCu", employeeId: "GRA-7002", name: "Abena Owusu", dept: "Customs Division", office: "Tema Collection Point", title: "Sector Commander", category: "SENIOR", role: "manager" },
   { key: "kofi", employeeId: "GRA-1001", name: "Kofi Adjei", dept: "Domestic Tax Revenue Division", office: "Head Office – Accra", title: "Principal Revenue Officer", category: "SENIOR", role: "employee", manager: "mgrDt" },
@@ -136,7 +137,9 @@ async function seedLeave(db: DB, ids: Ids) {
     const mgr = (await get<{ manager_id: number | null; role: string }>(db, "SELECT manager_id, role FROM users WHERE id = ?", ids[key].id))!;
     return mgr.role === "employee" ? mgr.manager_id : null;
   };
-  const deciderFor = async (key: string) => (await approverFor(key)) ?? ids.hr.id;
+  // Items routed to the HR pool are decided by an HR Administrator other than the employee.
+  const hrPoolFor = (key: string) => (key === "hr" ? ids.hr2.id : ids.hr.id);
+  const deciderFor = async (key: string) => (await approverFor(key)) ?? hrPoolFor(key);
   const nameOf = (id: number) => Object.values(ids).find((v) => v.id === id)!.name;
 
   async function plan(
@@ -161,7 +164,7 @@ async function seedLeave(db: DB, ids: Ids) {
     await updatePlan(db, id, { status: "submitted", submitted_at: created, approver_id: approverId });
     await audit(db, actor, "plan.submit", "plan", id, `Submitted ${o.amends ? "plan amendment" : "master leave plan"} ${year} v${p.version} (${analysis.total} days)`, { monthly: analysis.monthly }, created);
     if (status === "submitted") {
-      await notify(db, approverId ? [approverId] : [ids.hr.id], "plan.submitted", "New master leave plan to review",
+      await notify(db, [approverId ?? hrPoolFor(key)], "plan.submitted", "New master leave plan to review",
         `${actor.name} submitted a ${year} plan (${analysis.total} working days).`, `/approvals?item=plan-${id}`, created);
       return id;
     }
@@ -206,7 +209,7 @@ async function seedLeave(db: DB, ids: Ids) {
     const actor = ids[key];
     await audit(db, actor, "request.submit", "request", id, `Submitted Annual Leave ${formatRange(period)} (${a.days} days)`, { breakdown: a.breakdown }, submitted);
     if (status === "pending") {
-      await notify(db, [approverId ?? ids.hr.id], "request.submitted", "New leave request to review", `${actor.name} requested ${a.days} working day(s): ${formatRange(period)}.`, `/approvals?item=request-${id}`, submitted);
+      await notify(db, [approverId ?? hrPoolFor(key)], "request.submitted", "New leave request to review", `${actor.name} requested ${a.days} working day(s): ${formatRange(period)}.`, `/approvals?item=request-${id}`, submitted);
       return id;
     }
     const decider = await deciderFor(key);
@@ -269,4 +272,12 @@ async function seedLeave(db: DB, ids: Ids) {
   await plan("mgrDt", 2027, [P("2027-07-19", "2027-08-06"), P("2027-11-15", "2027-11-19")], "approved", { submitted: at("2026-10-01"), decided: at("2026-10-04") });
   // September becomes FULL: Akosua, Adwoa, Kojo, Fiifi (pending) and Abena (pending).
   await plan("mgrCu", 2027, [P("2027-08-16", "2027-09-03")], "submitted", { submitted: at("2026-10-18") });
+
+  // Managers' and HR staff's own requests, so every role has leave history on My requests.
+  await request("mgrDt", P("2027-07-19", "2027-07-30"), "pending", { submitted: at("2026-10-21"), note: "Annual leave – first part of planned July period" });
+  await plan("mgrCu", 2026, [P("2026-06-08", "2026-06-19")], "approved", { submitted: at("2026-01-15"), decided: at("2026-01-21") });
+  await request("mgrCu", P("2026-06-08", "2026-06-19"), "approved", { submitted: at("2026-05-04"), decided: at("2026-05-06") });
+  // HR staff leave is decided by another HR Administrator (Comfort decides Efua's).
+  await plan("hr", 2027, [P("2027-06-07", "2027-06-18"), P("2027-11-22", "2027-11-26")], "approved", { submitted: at("2026-10-02"), decided: at("2026-10-05") });
+  await request("hr", P("2027-06-07", "2027-06-18"), "approved", { submitted: at("2026-10-14"), decided: at("2026-10-15"), note: "Annual leave" });
 }

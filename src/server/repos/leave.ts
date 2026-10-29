@@ -61,6 +61,8 @@ export interface ListFilter<S> {
   decided?: boolean;
   /** Exclude one employee's own items (nobody decides their own leave). */
   notEmployeeId?: number;
+  /** Items of this manager's direct reports, or routed to them for a decision. */
+  managerId?: number;
   /** Requests only: end date on or after this ISO date. */
   endFrom?: string;
   limit?: number;
@@ -73,6 +75,7 @@ function where<S extends string>(alias: string, f: ListFilter<S>): { sql: string
   if (f.year) { w.push(`${alias}.year = ?`); params.push(f.year); }
   if (f.approverId) { w.push(`${alias}.approver_id = ?`); params.push(f.approverId); }
   if (f.decidedBy) { w.push(`${alias}.decided_by = ?`); params.push(f.decidedBy); }
+  if (f.managerId) { w.push(`(e.manager_id = ? OR ${alias}.approver_id = ?)`); params.push(f.managerId, f.managerId); }
   if (f.decided) w.push(`${alias}.decided_by IS NOT NULL`);
   if (f.notEmployeeId) { w.push(`${alias}.employee_id <> ?`); params.push(f.notEmployeeId); }
   if (f.endFrom) { w.push(`${alias}.end_date >= ?`); params.push(f.endFrom); }

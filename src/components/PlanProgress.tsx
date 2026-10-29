@@ -1,42 +1,20 @@
 "use client";
 
-import Box from "@mui/material/Box";
-import Stack from "@mui/material/Stack";
-import Typography from "@mui/material/Typography";
-import CheckIcon from "@mui/icons-material/Check";
-import PriorityHighIcon from "@mui/icons-material/PriorityHigh";
+import Steps, { type StepTone } from "./ui/Steps";
 
-type PlanState = "none" | "draft" | "submitted" | "returned" | "rejected" | "approved";
+type PlanState = "none" | "draft" | "submitted" | "returned" | "rejected" | "approved" | "superseded";
 
 /** Compact horizontal stepper: Draft → Submitted → Approved (with returned/rejected states). */
-export default function PlanProgress({ state, amendment }: { state: PlanState; amendment?: boolean }) {
-  const steps = ["Draft", amendment ? "Amendment submitted" : "Submitted", "Approved"];
-  const at = { none: -1, draft: 0, returned: 1, rejected: 1, submitted: 1, approved: 2 }[state];
+export default function PlanProgress({ state, amendment, compact }: { state: PlanState; amendment?: boolean; compact?: boolean }) {
+  const names = ["Draft", amendment ? "Amendment submitted" : "Submitted", "Approved"];
+  const at = { none: -1, draft: 0, returned: 1, rejected: 1, submitted: 1, approved: 2, superseded: 2 }[state];
   const problem = state === "returned" || state === "rejected";
-  return (
-    <Stack direction="row" sx={{ alignItems: "center" }} aria-label={`Plan progress: ${state}`}>
-      {steps.map((s, i) => {
-        const done = i < at || (i === at && state === "approved");
-        const current = i === at && !done;
-        const label = current && problem ? (state === "returned" ? "Returned" : "Rejected") : s;
-        return (
-          <Stack key={s} direction="row" sx={{ alignItems: "center", flex: i < steps.length - 1 ? 1 : "none", minWidth: 0 }}>
-            <Stack direction="row" spacing={0.6} sx={{ alignItems: "center", minWidth: 0, flexShrink: 0 }}>
-              <Box sx={{
-                width: 22, height: 22, borderRadius: "50%", flexShrink: 0, display: "grid", placeItems: "center", fontSize: "0.6875rem", fontWeight: 700,
-                bgcolor: done ? "success.main" : current ? (problem ? "warning.main" : "primary.main") : "action.disabledBackground",
-                color: done || current ? "#fff" : "text.secondary",
-              }}>
-                {done ? <CheckIcon sx={{ fontSize: "0.875rem" }} /> : current && problem ? <PriorityHighIcon sx={{ fontSize: "0.875rem" }} /> : i + 1}
-              </Box>
-              <Typography variant="caption" noWrap sx={{ fontWeight: current || done ? 700 : 500, color: current || done ? "text.primary" : "text.secondary" }}>
-                {label}
-              </Typography>
-            </Stack>
-            {i < steps.length - 1 && <Box sx={{ flex: 1, height: 2, mx: 0.75, minWidth: 6, borderRadius: 1, bgcolor: i < at ? "success.main" : "divider" }} />}
-          </Stack>
-        );
-      })}
-    </Stack>
-  );
+  const steps = names.map((s, i) => {
+    const done = i < at || (i === at && (state === "approved" || state === "superseded"));
+    const current = i === at && !done;
+    const tone: StepTone = done ? "done" : current ? (problem ? "warning" : "current") : "todo";
+    const label = current && problem ? (state === "returned" ? "Returned" : "Rejected") : state === "superseded" && i === 2 ? "Superseded" : s;
+    return { label, tone };
+  });
+  return <Steps steps={steps} compact={compact} label={`Plan progress: ${steps.map((s) => `${s.label}${s.tone === "todo" ? " (to do)" : ""}`).join(", ")}`} />;
 }

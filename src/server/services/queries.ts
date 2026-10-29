@@ -253,3 +253,26 @@ export async function wallchart(db: DB, user: User, year: number): Promise<Wallc
     spans,
   };
 }
+
+export interface TeamLeave {
+  requests: LeaveRequest[];
+  plans: Plan[];
+  /** Department name per employee id, for display and the HR department filter. */
+  departments: Record<number, string>;
+}
+
+/**
+ * Other people's requests and plans for a year: a manager sees their direct reports and anything routed
+ * to them; HR sees everyone. The viewer's own items are left out (they are on My requests / Annual plan).
+ */
+export async function teamLeave(db: DB, user: User, year: number): Promise<TeamLeave> {
+  if (user.role !== "manager" && user.role !== "hr") return { requests: [], plans: [], departments: {} };
+  const scope = user.role === "hr" ? {} : { managerId: user.id };
+  const [requests, plans, users] = await Promise.all([
+    listRequests(db, { ...scope, year, notEmployeeId: user.id }),
+    listPlans(db, { ...scope, year, notEmployeeId: user.id, status: ["submitted", "returned", "rejected", "approved"] }),
+    listUsers(db),
+  ]);
+  const departments = Object.fromEntries(users.map((u) => [u.id, u.departmentName ?? "—"]));
+  return { requests, plans, departments };
+}

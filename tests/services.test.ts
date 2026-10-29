@@ -2,9 +2,10 @@ import { beforeEach, describe, expect, it } from "vitest";
 import { login } from "@/server/auth";
 import { run, type DB } from "@/server/db";
 import { verifyAuditChain } from "@/server/repos/audit";
-import { getApprovedPlan, getPlan, listPlans } from "@/server/repos/leave";
+import { getApprovedPlan, getPlan, listPlans, listRequests } from "@/server/repos/leave";
 import { setSetting } from "@/server/repos/settings";
 import { loadEmployeeContext } from "@/server/services/context";
+import { teamLeave } from "@/server/services/queries";
 import { decidePlan, savePlanDraft, startAmendment, submitPlan } from "@/server/services/planService";
 import { cancelRequest, decideRequest, submitRequest } from "@/server/services/requestService";
 import { codes, occupancy, seededDb, user } from "./helpers";
@@ -34,6 +35,35 @@ describe("seeded scenarios", () => {
     const plans = await listPlans(db, { employeeId: (await user(db, "GRA-1005")).id, year: 2027 });
     expect(plans.map((p) => [p.version, p.status])).toEqual([[2, "approved"], [1, "superseded"]]);
     expect(plans[0].amendsPlanId).toBe(plans[1].id);
+  });
+});
+
+describe("team leave visibility", () => {
+  it("shows a manager only their reports and items routed to them, never their own", async () => {
+    const kwame = await user(db, "GRA-7001");
+    const t = await teamLeave(db, kwame, 2027);
+    expect(t.requests.length).toBeGreaterThan(0);
+    expect(t.requests.some((r) => r.employeeName === "Adwoa Sarpong" && r.status === "pending")).toBe(true);
+    expect([...t.requests, ...t.plans].some((x) => x.employeeId === kwame.id)).toBe(false);
+    // Customs staff report to Abena, so Kwame does not see them.
+    expect([...t.requests, ...t.plans].some((x) => t.departments[x.employeeId] === "Customs Division")).toBe(false);
+  });
+  it("shows HR every department, and nothing to employees", async () => {
+    const t = await teamLeave(db, await user(db, "GRA-8001"), 2027);
+    const depts = new Set([...t.requests, ...t.plans].map((x) => t.departments[x.employeeId]));
+    expect(depts).toContain("Domestic Tax Revenue Division");
+    expect(depts).toContain("Customs Division");
+    expect(t.requests.some((r) => r.employeeName === "Kwame Mensah" && r.status === "pending")).toBe(true);
+    expect([...t.requests, ...t.plans].some((x) => x.employeeName === "Efua Asante")).toBe(false);
+    const kofi = await teamLeave(db, await user(db, "GRA-1001"), 2027);
+    expect(kofi.requests.length + kofi.plans.length).toBe(0);
+  });
+  it("gives managers and HR their own leave history", async () => {
+    const mine = async (id: string) => listRequests(db, { employeeId: (await user(db, id)).id });
+    expect((await mine("GRA-7001")).map((r) => r.status)).toEqual(["pending"]);
+    expect((await mine("GRA-7002")).map((r) => r.status)).toEqual(["approved"]);
+    const efua = await mine("GRA-8001");
+    expect(efua.map((r) => [r.status, r.decidedByName])).toEqual([["approved", "Comfort Owusu-Ansah"]]);
   });
 });
 
