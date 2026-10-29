@@ -104,8 +104,8 @@ test("manager approves the plan; a 10-day March request is approved and the bala
 
   await signIn(page, "GRA-1001");
   await page.goto("/dashboard");
-  await expect(page.getByText("Approved leave").locator("..").getByText("10", { exact: true })).toBeVisible();
-  await expect(page.getByText("Available to book in 2027").locator("..").getByText("25", { exact: true })).toBeVisible();
+  await expect(page.locator("#main").getByText("Approved leave").locator("..").getByText("10", { exact: true })).toBeVisible();
+  await expect(page.locator("#main").getByText("Available to book in 2027").locator("..").getByText("25", { exact: true })).toBeVisible();
   done();
 });
 
@@ -169,7 +169,7 @@ test("HR: lowering capacity flags over-capacity months; exports download", async
   await expect(page.getByText(/Saved “Maximum distinct employees/)).toBeVisible();
 
   await page.goto("/hr/roster");
-  await expect(page.getByText(/Over capacity after a policy change/)).toBeVisible();
+  await expect(page.locator("#main").getByText(/Over capacity after a policy change/)).toBeVisible();
 
   await page.goto("/hr/reports");
   await page.getByRole("button", { name: "Export" }).click();

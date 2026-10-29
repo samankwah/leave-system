@@ -6,7 +6,7 @@ import { getDb } from "@/server/instance";
 export async function POST(req: Request) {
   try {
     const body = (await req.json().catch(() => ({}))) as { login?: string; password?: string };
-    const { token, user } = login(getDb(), body.login ?? "", body.password ?? "", req.headers.get("user-agent") ?? "");
+    const { token, user } = await login(await getDb(), body.login ?? "", body.password ?? "", req.headers.get("user-agent") ?? "");
     (await cookies()).set(SESSION_COOKIE, token, {
       httpOnly: true, sameSite: "lax", secure: process.env.NODE_ENV === "production", path: "/", maxAge: SESSION_HOURS * 3600,
     });

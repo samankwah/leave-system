@@ -10,6 +10,6 @@ export default async function AuditPage({ searchParams }: { searchParams: Promis
   await requireUser(["hr", "sysadmin"]);
   const sp = await searchParams;
   const valid = (d?: string) => (d && /^\d{4}-\d{2}-\d{2}$/.test(d) ? d : undefined);
-  const entries = listAudit(getDb(), { search: sp.q || undefined, entityType: sp.type || undefined, from: valid(sp.from), to: valid(sp.to), limit: 500 });
+  const entries = await listAudit(await getDb(), { search: sp.q || undefined, entityType: sp.type || undefined, from: valid(sp.from), to: valid(sp.to), limit: 500 });
   return <AuditView entries={entries} filters={{ q: sp.q ?? "", type: sp.type ?? "", from: valid(sp.from) ?? "", to: valid(sp.to) ?? "" }} />;
 }

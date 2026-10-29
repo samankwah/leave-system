@@ -10,13 +10,13 @@ export const dynamic = "force-dynamic";
 
 export default async function AppLayout({ children }: { children: React.ReactNode }) {
   const user = await requireUser();
-  const db = getDb();
+  const db = await getDb();
   const collapsed = (await cookies()).get(NAV_COOKIE)?.value === "1";
   return (
     <AppShell
       user={{ fullName: user.fullName, employeeId: user.employeeId, role: user.role, departmentName: user.departmentName }}
-      unread={unreadCount(db, user.id)}
-      pendingApprovals={pendingApprovalCount(db, user)}
+      unread={await unreadCount(db, user.id)}
+      pendingApprovals={await pendingApprovalCount(db, user)}
       initialCollapsed={collapsed}
     >
       {children}

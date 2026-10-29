@@ -1,4 +1,6 @@
-// Starts the production server against a throw-away database with a fixed "today" for E2E tests.
+// Starts the production server against a throw-away PGlite database with a fixed "today" for E2E tests.
+// DATABASE_URL is blanked so tests never touch the Neon database configured in .env.local
+// (Next.js does not override environment variables that are already set, even if empty).
 import { spawn } from "node:child_process";
 import fs from "node:fs";
 import path from "node:path";
@@ -12,8 +14,9 @@ const child = spawn(process.execPath, [path.join("node_modules", "next", "dist",
   stdio: "inherit",
   env: {
     ...process.env,
-    LEAVE_DB_PATH: path.join(dir, "leave.db"),
-    LEAVE_UPLOADS_DIR: path.join(dir, "uploads"),
+    DATABASE_URL: "",
+    DATABASE_URL_UNPOOLED: "",
+    LEAVE_DB_PATH: path.join(dir, "pglite"),
     LEAVE_TODAY: "2026-10-29",
   },
 });

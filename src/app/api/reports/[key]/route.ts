@@ -4,8 +4,8 @@ import { reportToCsv, reportToXlsx, runReport } from "@/server/services/reportSe
 
 export const GET = route(["hr", "sysadmin"], async ({ db, user, params, req }) => {
   const url = new URL(req.url);
-  const year = Number(url.searchParams.get("year")) || getPolicy(db).activeYear;
-  const report = runReport(db, user, params.key, year);
+  const year = Number(url.searchParams.get("year")) || (await getPolicy(db)).activeYear;
+  const report = await runReport(db, user, params.key, year);
   const format = url.searchParams.get("format");
   const name = `gra-leave-${report.key}-${year}`;
   if (format === "csv") {

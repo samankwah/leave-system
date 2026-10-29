@@ -1,7 +1,7 @@
 import type { NextConfig } from "next";
 
 const nextConfig: NextConfig = {
-  serverExternalPackages: ["exceljs"],
+  serverExternalPackages: ["exceljs", "pg", "@electric-sql/pglite"],
   poweredByHeader: false,
   async headers() {
     return [{

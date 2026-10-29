@@ -9,5 +9,5 @@ export const metadata: Metadata = { title: "Notifications" };
 
 export default async function NotificationsPage() {
   const user = await requireUser();
-  return <NotificationList items={listNotifications(getDb(), user.id, 200)} today={todayIso()} />;
+  return <NotificationList items={await listNotifications(await getDb(), user.id, 200)} today={todayIso()} />;
 }

@@ -54,23 +54,23 @@ const map = (r: UserRow): User => ({
   lockedUntil: r.locked_until,
 });
 
-export function getUser(db: DB, id: number): User | undefined {
-  const r = get<UserRow>(db, `${SELECT} WHERE u.id = ?`, id);
+export async function getUser(db: DB, id: number): Promise<User | undefined> {
+  const r = await get<UserRow>(db, `${SELECT} WHERE u.id = ?`, id);
   return r && map(r);
 }
 
 export function findLogin(db: DB, login: string) {
   return get<UserRow & { password_hash: string; failed_logins: number }>(
-    db, `${SELECT} WHERE u.employee_id = ? OR u.email = ?`, login.trim(), login.trim(),
+    db, `${SELECT} WHERE lower(u.employee_id) = lower(?) OR lower(u.email) = lower(?)`, login.trim(), login.trim(),
   );
 }
 
-export function listUsers(db: DB, opts: { activeOnly?: boolean } = {}): User[] {
-  return all<UserRow>(db, `${SELECT} ${opts.activeOnly ? "WHERE u.active = 1" : ""} ORDER BY u.full_name`).map(map);
+export async function listUsers(db: DB, opts: { activeOnly?: boolean } = {}): Promise<User[]> {
+  return (await all<UserRow>(db, `${SELECT} ${opts.activeOnly ? "WHERE u.active = 1" : ""} ORDER BY u.full_name`)).map(map);
 }
 
-export function usersByRole(db: DB, role: Role): User[] {
-  return all<UserRow>(db, `${SELECT} WHERE u.role = ? AND u.active = 1`, role).map(map);
+export async function usersByRole(db: DB, role: Role): Promise<User[]> {
+  return (await all<UserRow>(db, `${SELECT} WHERE u.role = ? AND u.active = 1`, role)).map(map);
 }
 
 export { map as mapUserRow };

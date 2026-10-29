@@ -28,7 +28,7 @@ export function route(roles: Role[] | null, handler: (ctx: HandlerCtx) => unknow
       }
       const result = await handler({
         user,
-        db: getDb(),
+        db: await getDb(),
         req,
         params: (await ctx.params) ?? {},
         body: async () => {

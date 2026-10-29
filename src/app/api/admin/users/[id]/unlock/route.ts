@@ -1,4 +1,4 @@
 import { idParam, route } from "@/server/api";
 import { unlockUser } from "@/server/services/adminService";
 
-export const POST = route(["sysadmin"], ({ db, user, params }) => unlockUser(db, user, idParam(params)));
+export const POST = route(["sysadmin"], async ({ db, user, params }) => unlockUser(db, user, idParam(params)));

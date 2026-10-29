@@ -1,15 +1,18 @@
-export const SCHEMA_VERSION = 1;
+export const SCHEMA_VERSION = 2;
 
+const NOW = `to_char(now() AT TIME ZONE 'UTC', 'YYYY-MM-DD"T"HH24:MI:SS.MS"Z"')`;
+
+/** Idempotent Postgres schema. Dates/timestamps are ISO-8601 TEXT so they compare and sort as strings. */
 export const SCHEMA = /* sql */ `
 CREATE TABLE IF NOT EXISTS meta (key TEXT PRIMARY KEY, value TEXT);
 
 CREATE TABLE IF NOT EXISTS departments (
-  id INTEGER PRIMARY KEY,
+  id SERIAL PRIMARY KEY,
   name TEXT NOT NULL UNIQUE
 );
 
 CREATE TABLE IF NOT EXISTS offices (
-  id INTEGER PRIMARY KEY,
+  id SERIAL PRIMARY KEY,
   name TEXT NOT NULL UNIQUE
 );
 
@@ -21,9 +24,9 @@ CREATE TABLE IF NOT EXISTS staff_categories (
 );
 
 CREATE TABLE IF NOT EXISTS users (
-  id INTEGER PRIMARY KEY,
-  employee_id TEXT NOT NULL UNIQUE COLLATE NOCASE,
-  email TEXT NOT NULL UNIQUE COLLATE NOCASE,
+  id SERIAL PRIMARY KEY,
+  employee_id TEXT NOT NULL,
+  email TEXT NOT NULL,
   full_name TEXT NOT NULL,
   department_id INTEGER REFERENCES departments(id),
   office_id INTEGER REFERENCES offices(id),
@@ -35,8 +38,10 @@ CREATE TABLE IF NOT EXISTS users (
   active INTEGER NOT NULL DEFAULT 1,
   failed_logins INTEGER NOT NULL DEFAULT 0,
   locked_until TEXT,
-  created_at TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ','now'))
+  created_at TEXT NOT NULL DEFAULT ${NOW}
 );
+CREATE UNIQUE INDEX IF NOT EXISTS users_employee_id_ci ON users (lower(employee_id));
+CREATE UNIQUE INDEX IF NOT EXISTS users_email_ci ON users (lower(email));
 
 CREATE TABLE IF NOT EXISTS sessions (
   token_hash TEXT PRIMARY KEY,
@@ -55,14 +60,14 @@ CREATE TABLE IF NOT EXISTS settings (
 );
 
 CREATE TABLE IF NOT EXISTS public_holidays (
-  id INTEGER PRIMARY KEY,
+  id SERIAL PRIMARY KEY,
   date TEXT NOT NULL UNIQUE,
   name TEXT NOT NULL,
   note TEXT NOT NULL DEFAULT ''
 );
 
 CREATE TABLE IF NOT EXISTS approval_routes (
-  id INTEGER PRIMARY KEY,
+  id SERIAL PRIMARY KEY,
   priority INTEGER NOT NULL DEFAULT 100,
   scope_type TEXT NOT NULL CHECK (scope_type IN ('department','category','role','default')),
   scope_value TEXT NOT NULL DEFAULT '',
@@ -73,7 +78,7 @@ CREATE TABLE IF NOT EXISTS approval_routes (
 );
 
 CREATE TABLE IF NOT EXISTS master_plans (
-  id INTEGER PRIMARY KEY,
+  id SERIAL PRIMARY KEY,
   employee_id INTEGER NOT NULL REFERENCES users(id),
   year INTEGER NOT NULL,
   version INTEGER NOT NULL,
@@ -91,7 +96,7 @@ CREATE TABLE IF NOT EXISTS master_plans (
 );
 
 CREATE TABLE IF NOT EXISTS plan_periods (
-  id INTEGER PRIMARY KEY,
+  id SERIAL PRIMARY KEY,
   plan_id INTEGER NOT NULL REFERENCES master_plans(id) ON DELETE CASCADE,
   start_date TEXT NOT NULL,
   end_date TEXT NOT NULL,
@@ -106,7 +111,7 @@ CREATE TABLE IF NOT EXISTS plan_month_allocations (
 );
 
 CREATE TABLE IF NOT EXISTS leave_requests (
-  id INTEGER PRIMARY KEY,
+  id SERIAL PRIMARY KEY,
   employee_id INTEGER NOT NULL REFERENCES users(id),
   year INTEGER NOT NULL,
   leave_type TEXT NOT NULL,
@@ -122,7 +127,8 @@ CREATE TABLE IF NOT EXISTS leave_requests (
   decided_at TEXT,
   decision_reason TEXT,
   attachment_name TEXT,
-  attachment_path TEXT,
+  attachment_type TEXT,
+  attachment_data BYTEA,
   created_at TEXT NOT NULL,
   updated_at TEXT NOT NULL
 );
@@ -137,7 +143,7 @@ CREATE TABLE IF NOT EXISTS request_month_breakdown (
 -- Capacity reservation ledger: every ACTIVE plan/request allocation per employee per month.
 -- Distinct employee_id per month = occupied slots. Inactive statuses drop out automatically,
 -- releasing the slot when no other active source for that employee remains.
-CREATE VIEW IF NOT EXISTS v_allocations AS
+CREATE OR REPLACE VIEW v_allocations AS
   SELECT p.employee_id, a.month, a.days, 'plan' AS source_type, p.id AS source_id, p.status,
          CASE WHEN p.status = 'approved' THEN 1 ELSE 0 END AS approved
     FROM master_plans p JOIN plan_month_allocations a ON a.plan_id = p.id
@@ -149,7 +155,7 @@ CREATE VIEW IF NOT EXISTS v_allocations AS
    WHERE r.status IN ('pending','approved');
 
 CREATE TABLE IF NOT EXISTS notifications (
-  id INTEGER PRIMARY KEY,
+  id SERIAL PRIMARY KEY,
   user_id INTEGER NOT NULL REFERENCES users(id),
   kind TEXT NOT NULL,
   title TEXT NOT NULL,
@@ -160,7 +166,7 @@ CREATE TABLE IF NOT EXISTS notifications (
 );
 
 CREATE TABLE IF NOT EXISTS audit_log (
-  id INTEGER PRIMARY KEY,
+  id SERIAL PRIMARY KEY,
   ts TEXT NOT NULL,
   actor_id INTEGER,
   actor_name TEXT NOT NULL,
@@ -173,12 +179,26 @@ CREATE TABLE IF NOT EXISTS audit_log (
   hash TEXT NOT NULL
 );
 
-CREATE TRIGGER IF NOT EXISTS audit_log_no_update BEFORE UPDATE ON audit_log
-BEGIN SELECT RAISE(ABORT, 'audit_log is append-only'); END;
-CREATE TRIGGER IF NOT EXISTS audit_log_no_delete BEFORE DELETE ON audit_log
-BEGIN SELECT RAISE(ABORT, 'audit_log is append-only'); END;
+CREATE OR REPLACE FUNCTION audit_log_append_only() RETURNS trigger LANGUAGE plpgsql AS $$
+BEGIN
+  RAISE EXCEPTION 'audit_log is append-only';
+END;
+$$;
+CREATE OR REPLACE TRIGGER audit_log_no_change BEFORE UPDATE OR DELETE ON audit_log
+  FOR EACH ROW EXECUTE FUNCTION audit_log_append_only();
 
 CREATE INDEX IF NOT EXISTS idx_plans_emp ON master_plans(employee_id, year);
 CREATE INDEX IF NOT EXISTS idx_requests_emp ON leave_requests(employee_id, year);
 CREATE INDEX IF NOT EXISTS idx_notifications_user ON notifications(user_id, read_at);
+CREATE INDEX IF NOT EXISTS idx_audit_entity ON audit_log(entity_type, entity_id);
+CREATE INDEX IF NOT EXISTS idx_audit_ts ON audit_log(ts);
+`;
+
+/** Drops every object this app owns (used by "reset demo data"). */
+export const DROP_ALL = /* sql */ `
+DROP VIEW IF EXISTS v_allocations;
+DROP TABLE IF EXISTS audit_log, notifications, request_month_breakdown, leave_requests, plan_month_allocations,
+  plan_periods, master_plans, approval_routes, public_holidays, settings, sessions, users, staff_categories,
+  offices, departments, meta CASCADE;
+DROP FUNCTION IF EXISTS audit_log_append_only() CASCADE;
 `;

@@ -10,10 +10,10 @@ export const metadata: Metadata = { title: "Employees" };
 
 export default async function EmployeesPage() {
   await requireUser(["hr"]);
-  const db = getDb();
-  const year = getPolicy(db).activeYear;
-  const users = listUsers(db);
-  const contexts = loadContextBatch(db, year, users);
+  const db = await getDb();
+  const year = (await getPolicy(db)).activeYear;
+  const users = await listUsers(db);
+  const contexts = await loadContextBatch(db, year, users);
   const rows: EmployeeRow[] = users.map((u) => {
     const c = contexts.get(u.id)!;
     return {
@@ -24,5 +24,5 @@ export default async function EmployeesPage() {
       requests: c.requests.slice(0, 5).map((r) => ({ id: r.id, start: r.start, end: r.end, days: r.days, status: r.status })),
     };
   });
-  return <EmployeesView year={year} users={rows} departments={getDepartments(db)} offices={getOffices(db)} categories={getCategories(db)} />;
+  return <EmployeesView year={year} users={rows} departments={await getDepartments(db)} offices={await getOffices(db)} categories={await getCategories(db)} />;
 }

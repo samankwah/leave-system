@@ -21,19 +21,19 @@ export const POLICY_LABELS: Record<keyof PolicySettings, string> = {
   leaveTypes: "Leave types handled by this system",
 };
 
-export function getPolicy(db: DB): PolicySettings {
-  const rows = all<{ key: string; value: string }>(db, "SELECT key, value FROM settings");
+export async function getPolicy(db: DB): Promise<PolicySettings> {
+  const rows = await all<{ key: string; value: string }>(db, "SELECT key, value FROM settings");
   const out = { ...DEFAULT_POLICY } as Record<string, unknown>;
   for (const r of rows) if (r.key in out) out[r.key] = JSON.parse(r.value);
   return out as unknown as PolicySettings;
 }
 
-export function getPolicyRows(db: DB) {
-  const policy = getPolicy(db);
+export async function getPolicyRows(db: DB) {
+  const policy = await getPolicy(db);
   const meta = new Map(
-    all<{ key: string; status: RuleStatus; updated_at: string | null; updated_by: number | null }>(
+    (await all<{ key: string; status: RuleStatus; updated_at: string | null; updated_by: number | null }>(
       db, "SELECT key, status, updated_at, updated_by FROM settings",
-    ).map((r) => [r.key, r]),
+    )).map((r) => [r.key, r]),
   );
   return (Object.keys(DEFAULT_POLICY) as (keyof PolicySettings)[]).map((key) => ({
     key,
@@ -44,45 +44,45 @@ export function getPolicyRows(db: DB) {
   }));
 }
 
-export function setSetting(db: DB, key: keyof PolicySettings, value: unknown, status: RuleStatus, userId: number | null) {
-  run(
+export async function setSetting(db: DB, key: keyof PolicySettings, value: unknown, status: RuleStatus, userId: number | null) {
+  await run(
     db,
     `INSERT INTO settings (key, value, status, updated_by, updated_at) VALUES (?, ?, ?, ?, ?)
-     ON CONFLICT(key) DO UPDATE SET value = excluded.value, status = excluded.status,
-       updated_by = excluded.updated_by, updated_at = excluded.updated_at`,
+     ON CONFLICT (key) DO UPDATE SET value = EXCLUDED.value, status = EXCLUDED.status,
+       updated_by = EXCLUDED.updated_by, updated_at = EXCLUDED.updated_at`,
     key, JSON.stringify(value), status, userId, nowIso(),
   );
 }
 
-export function getCategories(db: DB): StaffCategory[] {
-  return all<{ code: string; name: string; entitlement_days: number; status: RuleStatus }>(
+export async function getCategories(db: DB): Promise<StaffCategory[]> {
+  return (await all<{ code: string; name: string; entitlement_days: number; status: RuleStatus }>(
     db, "SELECT * FROM staff_categories ORDER BY entitlement_days DESC, code",
-  ).map((r) => ({ code: r.code, name: r.name, entitlementDays: r.entitlement_days, status: r.status }));
+  )).map((r) => ({ code: r.code, name: r.name, entitlementDays: r.entitlement_days, status: r.status }));
 }
 
-export function getCategory(db: DB, code: string): StaffCategory | undefined {
-  return getCategories(db).find((c) => c.code === code);
+export async function getCategory(db: DB, code: string): Promise<StaffCategory | undefined> {
+  return (await getCategories(db)).find((c) => c.code === code);
 }
 
-export function upsertCategory(db: DB, c: StaffCategory) {
-  run(
+export async function upsertCategory(db: DB, c: StaffCategory) {
+  await run(
     db,
     `INSERT INTO staff_categories (code, name, entitlement_days, status) VALUES (?, ?, ?, ?)
-     ON CONFLICT(code) DO UPDATE SET name = excluded.name, entitlement_days = excluded.entitlement_days, status = excluded.status`,
+     ON CONFLICT (code) DO UPDATE SET name = EXCLUDED.name, entitlement_days = EXCLUDED.entitlement_days, status = EXCLUDED.status`,
     c.code, c.name, c.entitlementDays, c.status,
   );
 }
 
 export interface Holiday { id: number; date: string; name: string; note: string }
 
-export function getHolidays(db: DB, year?: number): Holiday[] {
+export function getHolidays(db: DB, year?: number): Promise<Holiday[]> {
   return year
     ? all<Holiday>(db, "SELECT * FROM public_holidays WHERE substr(date,1,4) = ? ORDER BY date", String(year))
     : all<Holiday>(db, "SELECT * FROM public_holidays ORDER BY date");
 }
 
-export function holidaySet(db: DB): Set<string> {
-  return new Set(all<{ date: string }>(db, "SELECT date FROM public_holidays").map((r) => r.date));
+export async function holidaySet(db: DB): Promise<Set<string>> {
+  return new Set((await all<{ date: string }>(db, "SELECT date FROM public_holidays")).map((r) => r.date));
 }
 
 export interface NamedRow { id: number; name: string }
@@ -103,4 +103,5 @@ export interface ApprovalRoute {
 export const getRoutes = (db: DB) =>
   all<ApprovalRoute>(db, "SELECT * FROM approval_routes ORDER BY priority, id");
 
-export const getMeta = (db: DB, key: string) => get<{ value: string }>(db, "SELECT value FROM meta WHERE key = ?", key)?.value;
+export const getMeta = async (db: DB, key: string) =>
+  (await get<{ value: string }>(db, "SELECT value FROM meta WHERE key = ?", key))?.value;

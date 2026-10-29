@@ -4,14 +4,15 @@ A full-stack prototype for annual leave planning, scheduling, approval and monit
 
 ## Setup
 
-Requires **Node.js 22.13+** (built and tested on Node 24.16). No separate database server is needed, because it uses Node's built-in SQLite.
+Requires **Node.js 22.13+** (built and tested on Node 24.16). Production runs on **Vercel** with a **Neon Postgres** database. For local development and tests the same schema runs in **PGlite** (Postgres compiled to WebAssembly), so no database server is needed.
 
 ```bash
 npm install
-npm run dev            # http://localhost:3000  (or: npm run build && npm start)
+npm run dev:local      # http://localhost:3000 on a local PGlite database (data/pglite)
+npm run dev            # same, but against the Neon DATABASE_URL in .env.local
 npm test               # unit and service tests (vitest)
 npm run typecheck
-npm run db:reset       # delete local data; demo data reloads on next start
+npm run db:reset       # delete the local PGlite data; demo data reloads on next start
 
 # Browser tests (Playwright, Chromium). Run `npm run build` first; they start their own server
 # on port 3100 against a throw-away database with "today" fixed at 2026-10-29.
@@ -20,7 +21,19 @@ npm run test:e2e       # end-to-end user journeys
 npm run screenshots    # every page x desktop/phone x light/dark -> e2e/screenshots/
 ```
 
-The database is created at `data/leave.db` and seeded with demo data the first time it starts. Uploaded documents are stored in `data/uploads/`. You can override these locations with `LEAVE_DB_PATH` and `LEAVE_UPLOADS_DIR`. `LEAVE_TODAY=YYYY-MM-DD` fixes "today" for demos and tests.
+**Database selection.**
+- When `DATABASE_URL` is set, the app uses `node-postgres` with a pooled Neon connection.
+- Otherwise it uses PGlite stored in `data/pglite`. Override the location with `LEAVE_DB_PATH`.
+
+On first start the app creates the schema and loads the demo data. Schema changes go over Neon's direct (`DATABASE_URL_UNPOOLED`) endpoint. Supporting documents are stored in Postgres, because serverless disks don't persist. `LEAVE_TODAY=YYYY-MM-DD` fixes "today" for demos and tests.
+
+## Deployment (Vercel + Neon)
+
+- **Vercel project:** `leave-system`, connected to this GitHub repository. Every push to `main` deploys to production.
+- **Database:** Neon Postgres, provisioned through the Vercel Marketplace (`vercel integration add neon`). The integration manages `DATABASE_URL`, `DATABASE_URL_UNPOOLED` and the related variables in the project.
+- **Region:** functions are pinned to `lhr1` (London) in `vercel.ts`, the same region as the Neon database (`eu-west-2`).
+- **Local environment:** run `vercel env pull` to fetch the variables into `.env.local`, which git ignores.
+- **Resetting production data:** sign in as the System Administrator and use **User access → Danger zone → Reset demo data**.
 
 ## Demo credentials
 
@@ -174,7 +187,7 @@ src/domain/      Pure TypeScript business rules (no I/O), shared by server and b
   planRules      master plan validation
   requestRules   leave request validation
   messages       exact warning texts
-src/server/      Server-only: SQLite (node:sqlite), auth, repositories, services
+src/server/      Server-only: Postgres access (db.ts, drivers.ts: pg for Neon, PGlite locally), schema, auth, repositories, services
   services/      planService, requestService, workflow (routing, permissions),
                  adminService (HR + sysadmin), reportService, queries (page data)
 src/app/api/     Route Handlers: thin wrappers around services
@@ -199,7 +212,7 @@ Each month's occupancy is the number of **distinct** employees in it. This gives
 - A pending item that introduces a new month reserves a slot.
 - A slot is released automatically when the employee's last active source for that month is rejected, returned, cancelled or superseded.
 
-**Concurrency.** Each write that checks capacity runs in a `BEGIN IMMEDIATE` transaction. The write lock is taken *before* capacity is read, so two simultaneous attempts on the last slot cannot both succeed. A test covers this with two database connections.
+**Concurrency.** Each write that checks capacity runs in a Postgres transaction that first takes a transaction-scoped advisory lock (`pg_advisory_xact_lock`). The lock is taken *before* capacity is read, so two simultaneous attempts on the last slot cannot both succeed, even from different serverless instances. A test fires two submissions at once and checks that exactly one wins. Any rule failure rolls back every write in the transaction, including audit records and notifications.
 
 **Performance.** Employee contexts for reports, HR lists and the approvals queue load in a batch: policy, holidays, allocations, plans and requests are each read once rather than once per employee. Plan periods and request breakdowns are also batch-loaded.
 
@@ -244,7 +257,8 @@ Each month's occupancy is the number of **distinct** employees in it. This gives
 
 ## Limitations of this prototype
 
-- SQLite runs on a single server. For production, use a managed database such as PostgreSQL with the same transaction-safe capacity check (e.g. `SELECT … FOR UPDATE` or serializable isolation), plus backups and recovery.
+- The global advisory lock serialises all writes. That is ample for one organisation's leave traffic, but a much larger deployment would lock per month instead.
+- Backups use Neon's built-in point-in-time restore. Retention depends on the Neon plan, so confirm it meets GRA's requirements.
 - There is no email or SMS delivery; notifications are in-app only. There is no integration with GRA identity (SSO) or HR/payroll systems.
 - Approval has a single step. A multi-level chain (e.g. manager then HR) would need routes extended into ordered steps.
 - Only *Annual Leave* is modelled. Sick, maternity and other leave types have different rules and are out of scope.

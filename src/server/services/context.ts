@@ -44,15 +44,20 @@ function groupBy<T>(items: T[], key: (t: T) => number): Map<number, T[]> {
   return m;
 }
 
-function loadYearData(db: DB, year: number, employeeIds?: number[]): YearData {
-  const policy = getPolicy(db);
-  // For a single employee, query only their rows; for batches, one query per table.
+async function loadYearData(db: DB, year: number, employeeIds?: number[]): Promise<YearData> {
+  // For a single employee, query only their rows; for batches, one query per table. Queries run in parallel.
   const one = employeeIds?.length === 1 ? employeeIds[0] : undefined;
-  const plans = listPlans(db, { year, employeeId: one });
-  const requests = listRequests(db, { year, employeeId: one });
+  const [policy, plans, requests, holidays, categories, allocations] = await Promise.all([
+    getPolicy(db),
+    listPlans(db, { year, employeeId: one }),
+    listRequests(db, { year, employeeId: one }),
+    holidaySet(db),
+    getCategories(db),
+    listAllocations(db, year),
+  ]);
   const prevApproved = new Map<number, number>();
   if (policy.carryoverEnabled && policy.carryoverMaxDays > 0) {
-    for (const r of listRequests(db, { year: year - 1, status: ["approved"], employeeId: one })) {
+    for (const r of await listRequests(db, { year: year - 1, status: ["approved"], employeeId: one })) {
       prevApproved.set(r.employeeId, (prevApproved.get(r.employeeId) ?? 0) + r.days);
     }
   }
@@ -60,9 +65,9 @@ function loadYearData(db: DB, year: number, employeeIds?: number[]): YearData {
     year,
     today: todayIso(),
     policy,
-    holidays: holidaySet(db),
-    categories: new Map(getCategories(db).map((c) => [c.code, c])),
-    allocations: listAllocations(db, year),
+    holidays,
+    categories: new Map(categories.map((c) => [c.code, c])),
+    allocations,
     plans: groupBy(plans, (p) => p.employeeId),
     requests: groupBy(requests, (r) => r.employeeId),
     prevApproved,
@@ -103,22 +108,22 @@ function buildContext(d: YearData, user: User): EmployeeContext {
 }
 
 /** Entitlement is derived from the staff category (plus carryover when enabled); employees never set it. */
-export function entitlementOf(db: DB, user: User, year: number) {
-  const c = buildContext(loadYearData(db, year, [user.id]), user);
+export async function entitlementOf(db: DB, user: User, year: number) {
+  const c = buildContext(await loadYearData(db, year, [user.id]), user);
   return { base: c.baseEntitlement, carryover: c.carryover, total: c.entitlement };
 }
 
-export function loadEmployeeContext(db: DB, userId: number, year: number): EmployeeContext {
-  const user = getUser(db, userId);
+export async function loadEmployeeContext(db: DB, userId: number, year: number): Promise<EmployeeContext> {
+  const user = await getUser(db, userId);
   if (!user) throw notFound("Employee");
-  return buildContext(loadYearData(db, year, [userId]), user);
+  return buildContext(await loadYearData(db, year, [userId]), user);
 }
 
 /**
  * Contexts for many employees with a fixed number of queries (policy, holidays, allocations,
  * plans and requests are each read once) — used by reports, HR lists and the approvals queue.
  */
-export function loadContextBatch(db: DB, year: number, users: User[] = listUsers(db)): Map<number, EmployeeContext> {
-  const d = loadYearData(db, year);
-  return new Map(users.map((u) => [u.id, buildContext(d, u)]));
+export async function loadContextBatch(db: DB, year: number, users?: User[]): Promise<Map<number, EmployeeContext>> {
+  const [d, list] = await Promise.all([loadYearData(db, year), users ?? listUsers(db)]);
+  return new Map(list.map((u) => [u.id, buildContext(d, u)]));
 }

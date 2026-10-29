@@ -36,19 +36,18 @@ export function canViewReports(u: User) {
   return u.role === "hr" || u.role === "sysadmin";
 }
 
-export function runReport(db: DB, actor: User, key: string, year: number): Report {
+export async function runReport(db: DB, actor: User, key: string, year: number): Promise<Report> {
   if (!canViewReports(actor)) throw forbidden("Only HR Administrators can generate reports.");
   if (!REPORTS[key]) throw forbidden("Unknown report.");
   if (actor.role === "sysadmin" && key !== "audit") throw forbidden("System Administrators can only export the audit report.");
   const meta = REPORTS[key];
-  const policy = getPolicy(db);
-  const users = listUsers(db, { activeOnly: true });
+  const [policy, users] = await Promise.all([getPolicy(db), listUsers(db, { activeOnly: true })]);
   const base = { key, ...meta, title: key === "audit" ? meta.title : `${meta.title} – ${year}` };
 
   switch (key) {
     case "balances":
     case "planned-vs-actual": {
-      const contexts = loadContextBatch(db, year, users);
+      const contexts = await loadContextBatch(db, year, users);
       const rows = users.map((u) => {
         const c = contexts.get(u.id)!;
         const b = c.balance;
@@ -70,7 +69,7 @@ export function runReport(db: DB, actor: User, key: string, year: number): Repor
     }
     case "upcoming-by-month": {
       const today = todayIso();
-      const rows = listRequests(db, { status: ["approved", "pending"] })
+      const rows = (await listRequests(db, { status: ["approved", "pending"] }))
         .filter((r) => r.end >= today && r.year === year)
         .flatMap((r) => Object.entries(r.breakdown).map(([m, d]) => ({ month: m, monthLabel: monthLabel(m), name: r.employeeName, dates: formatRange(r), days: d, status: r.status })))
         .sort((a, b) => a.month.localeCompare(b.month) || a.name.localeCompare(b.name));
@@ -78,7 +77,7 @@ export function runReport(db: DB, actor: User, key: string, year: number): Repor
     }
     case "department-capacity":
     case "fully-booked": {
-      const allocs = listAllocations(db, year);
+      const allocs = await listAllocations(db, year);
       const occ = computeOccupancy(allocs, yearMonths(year), policy.monthlyCapacity, policy.restrictedMonths);
       const byId = new Map(users.map((u) => [u.id, u]));
       if (key === "fully-booked") {
@@ -98,8 +97,8 @@ export function runReport(db: DB, actor: User, key: string, year: number): Repor
       return { ...base, columns: [col("month", "Month"), ...depts.map((d) => col(d, d)), col("total", "Total employees"), col("remaining", "Slots remaining"), col("status", "Status")], rows };
     }
     case "pending-approvals": {
-      const plans = listPlans(db, { status: ["submitted"], year }).map((p) => ({ type: p.amendsPlanId ? "Plan amendment" : "Master plan", name: p.employeeName, detail: `${p.totalDays} days, v${p.version}`, submitted: p.submittedAt ?? "", approver: p.approverName ?? "HR pool" }));
-      const reqs = listRequests(db, { status: ["pending"], year }).map((r) => ({ type: "Leave request", name: r.employeeName, detail: `${formatRange(r)} (${r.days} days)`, submitted: r.submittedAt, approver: r.approverName ?? "HR pool" }));
+      const plans = (await listPlans(db, { status: ["submitted"], year })).map((p) => ({ type: p.amendsPlanId ? "Plan amendment" : "Master plan", name: p.employeeName, detail: `${p.totalDays} days, v${p.version}`, submitted: p.submittedAt ?? "", approver: p.approverName ?? "HR pool" }));
+      const reqs = (await listRequests(db, { status: ["pending"], year })).map((r) => ({ type: "Leave request", name: r.employeeName, detail: `${formatRange(r)} (${r.days} days)`, submitted: r.submittedAt, approver: r.approverName ?? "HR pool" }));
       const rows = [...plans, ...reqs].map((x) => {
         const waiting = daysSince(x.submitted);
         return { ...x, submitted: x.submitted.slice(0, 10), waiting, overdue: waiting > policy.overdueApprovalDays ? "OVERDUE" : "" };
@@ -107,12 +106,12 @@ export function runReport(db: DB, actor: User, key: string, year: number): Repor
       return { ...base, columns: [col("type", "Type"), col("name", "Employee"), col("detail", "Details"), col("submitted", "Submitted"), col("waiting", "Days waiting"), col("approver", "Approver"), col("overdue", "Overdue")], rows };
     }
     case "returned": {
-      const plans = listPlans(db, { status: ["returned"], year }).map((p) => ({ type: "Master plan", name: p.employeeName, detail: `v${p.version}, ${p.totalDays} days`, by: p.decidedByName ?? "", at: (p.decidedAt ?? "").slice(0, 10), reason: p.decisionReason ?? "" }));
-      const reqs = listRequests(db, { status: ["returned"], year }).map((r) => ({ type: "Leave request", name: r.employeeName, detail: formatRange(r), by: r.decidedByName ?? "", at: (r.decidedAt ?? "").slice(0, 10), reason: r.decisionReason ?? "" }));
+      const plans = (await listPlans(db, { status: ["returned"], year })).map((p) => ({ type: "Master plan", name: p.employeeName, detail: `v${p.version}, ${p.totalDays} days`, by: p.decidedByName ?? "", at: (p.decidedAt ?? "").slice(0, 10), reason: p.decisionReason ?? "" }));
+      const reqs = (await listRequests(db, { status: ["returned"], year })).map((r) => ({ type: "Leave request", name: r.employeeName, detail: formatRange(r), by: r.decidedByName ?? "", at: (r.decidedAt ?? "").slice(0, 10), reason: r.decisionReason ?? "" }));
       return { ...base, columns: [col("type", "Type"), col("name", "Employee"), col("detail", "Details"), col("by", "Returned by"), col("at", "Date"), col("reason", "Reason")], rows: [...plans, ...reqs] };
     }
     case "amendments": {
-      const rows = listPlans(db, { year }).filter((p) => p.version > 1 || p.amendsPlanId || p.status === "superseded").map((p) => ({
+      const rows = (await listPlans(db, { year })).filter((p) => p.version > 1 || p.amendsPlanId || p.status === "superseded").map((p) => ({
         name: p.employeeName, version: p.version, status: p.status, amends: p.amendsPlanId ? `#${p.amendsPlanId}` : "",
         periods: p.periods.map(formatRange).join("; "), days: p.totalDays, decidedBy: p.decidedByName ?? "", decidedAt: (p.decidedAt ?? "").slice(0, 10),
       }));
@@ -120,7 +119,7 @@ export function runReport(db: DB, actor: User, key: string, year: number): Repor
     }
     case "audit":
     default: {
-      const rows = listAudit(db, { limit: 2000 }).map((a) => ({ ts: a.ts.replace("T", " ").slice(0, 19), actor: a.actor_name, action: a.action, entity: `${a.entity_type}${a.entity_id ? " #" + a.entity_id : ""}`, summary: a.summary }));
+      const rows = (await listAudit(db, { limit: 2000 })).map((a) => ({ ts: a.ts.replace("T", " ").slice(0, 19), actor: a.actor_name, action: a.action, entity: `${a.entity_type}${a.entity_id ? " #" + a.entity_id : ""}`, summary: a.summary }));
       return { ...base, columns: [col("ts", "Time (UTC)"), col("actor", "Actor"), col("action", "Action"), col("entity", "Record"), col("summary", "Summary")], rows };
     }
   }

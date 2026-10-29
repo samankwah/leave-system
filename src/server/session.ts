@@ -8,7 +8,7 @@ import type { User } from "./repos/users";
 
 export async function getCurrentUser(): Promise<User | null> {
   const token = (await cookies()).get(SESSION_COOKIE)?.value;
-  return userForToken(getDb(), token);
+  return userForToken(await getDb(), token);
 }
 
 /** For server pages: redirects to login when signed out and to the dashboard when the role is not allowed. */

@@ -11,11 +11,11 @@ export const metadata: Metadata = { title: "Dashboard" };
 
 export default async function DashboardPage({ searchParams }: { searchParams: Promise<{ year?: string; denied?: string }> }) {
   const user = await requireUser();
-  const db = getDb();
+  const db = await getDb();
   const sp = await searchParams;
-  const policy = getPolicy(db);
+  const policy = await getPolicy(db);
   const year = Number(sp.year) || policy.activeYear;
-  const cal = calendarData(db, user, year);
+  const cal = await calendarData(db, user, year);
   return (
     <DashboardView
       denied={sp.denied === "1"}
@@ -26,10 +26,10 @@ export default async function DashboardPage({ searchParams }: { searchParams: Pr
       year={year}
       years={[policy.activeYear - 1, policy.activeYear, policy.activeYear + 1]}
       data={cal}
-      requests={listRequests(db, { employeeId: user.id, year }).sort((a, b) => b.submittedAt.localeCompare(a.submittedAt))}
-      working={getWorkingPlan(db, user.id, year) ?? null}
-      notifications={listNotifications(db, user.id, 5)}
-      attention={attentionSummary(db, user, year, cal.today)}
+      requests={(await listRequests(db, { employeeId: user.id, year })).sort((a, b) => b.submittedAt.localeCompare(a.submittedAt))}
+      working={await getWorkingPlan(db, user.id, year) ?? null}
+      notifications={await listNotifications(db, user.id, 5)}
+      attention={await attentionSummary(db, user, year, cal.today)}
     />
   );
 }

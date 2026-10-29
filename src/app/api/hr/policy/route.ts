@@ -3,5 +3,5 @@ import { updatePolicy } from "@/server/services/adminService";
 
 export const PUT = route(["hr"], async ({ db, user, body }) => {
   const b = await body();
-  updatePolicy(db, user, String(b.key), b.value, b.status);
+  await updatePolicy(db, user, String(b.key), b.value, b.status);
 });
