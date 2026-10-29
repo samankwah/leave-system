@@ -75,7 +75,7 @@ export default function AccountView({ name, subtitle, profile }: { name: string;
           <Stack spacing={2.5}>
             <Section>
               <Stack direction="row" spacing={2} sx={{ alignItems: "center", mb: 2.5 }}>
-                <Avatar sx={{ width: 56, height: 56, fontSize: 20, fontWeight: 700, bgcolor: "primary.main", color: "primary.contrastText" }}>{initials(name)}</Avatar>
+                <Avatar sx={{ width: 56, height: 56, fontSize: "1.25rem", fontWeight: 700, bgcolor: "primary.main", color: "primary.contrastText" }}>{initials(name)}</Avatar>
                 <Box>
                   <Typography variant="h6">{name}</Typography>
                   <Typography variant="body2" color="text.secondary">{subtitle}</Typography>

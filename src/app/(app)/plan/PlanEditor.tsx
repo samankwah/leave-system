@@ -240,7 +240,7 @@ export default function PlanEditor({ data, years, category, working, approved, v
             <Section title="Summary">
               <Stack direction="row" sx={{ alignItems: "baseline", justifyContent: "space-between" }}>
                 <Stack direction="row" spacing={0.75} sx={{ alignItems: "baseline" }}>
-                  <Typography sx={{ fontSize: 30, fontWeight: 750, lineHeight: 1, fontVariantNumeric: "tabular-nums", color: over ? "error.main" : "text.primary" }}>{analysis.total}</Typography>
+                  <Typography sx={{ fontSize: "1.875rem", fontWeight: 750, lineHeight: 1, fontVariantNumeric: "tabular-nums", color: over ? "error.main" : "text.primary" }}>{analysis.total}</Typography>
                   <Typography color="text.secondary">/ {data.entitlement} days planned</Typography>
                 </Stack>
               </Stack>

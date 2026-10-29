@@ -34,7 +34,7 @@ export default function MonthBars({ year, values, compare, restrictedMonths, blo
           return (
             <Tooltip key={m} title={`${monthLabel(m)}: ${restricted ? "restricted" : `${v} day${v === 1 ? "" : "s"}${compare ? ` (approved: ${c})` : ""}${isBlocked ? " — month full" : ""}`}`}>
               <Box sx={{ flex: 1, height: "100%", display: "flex", flexDirection: "column", justifyContent: "flex-end", alignItems: "center", position: "relative" }}>
-                {v > 0 && <Typography sx={{ fontSize: 10.5, fontWeight: 700, mb: 0.25, color: isBlocked ? "error.main" : "text.primary" }}>{v}</Typography>}
+                {v > 0 && <Typography sx={{ fontSize: "0.65625rem", fontWeight: 700, mb: 0.25, color: isBlocked ? "error.main" : "text.primary" }}>{v}</Typography>}
                 <Box sx={{ width: "100%", position: "relative", height: restricted ? 10 : `${(Math.max(v, c) / top) * 72}px`, minHeight: 3 }}>
                   {compare && c > 0 && (
                     <Box sx={{ position: "absolute", bottom: 0, left: 0, right: 0, height: `${(c / Math.max(v, c)) * 100}%`, borderRadius: 1, border: "1.5px dashed", borderColor: "text.disabled" }} />
@@ -54,7 +54,7 @@ export default function MonthBars({ year, values, compare, restrictedMonths, blo
       </Stack>
       <Stack direction="row" spacing={0.5} sx={{ mt: 0.75 }}>
         {MONTH_NAMES.map((n) => (
-          <Typography key={n} sx={{ flex: 1, textAlign: "center", fontSize: 10.5, color: "text.secondary" }}>{n[0]}</Typography>
+          <Typography key={n} sx={{ flex: 1, textAlign: "center", fontSize: "0.65625rem", color: "text.secondary" }}>{n[0]}</Typography>
         ))}
       </Stack>
     </Box>

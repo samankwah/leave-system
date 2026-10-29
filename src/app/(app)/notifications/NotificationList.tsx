@@ -102,7 +102,7 @@ export default function NotificationList({ items: initial, today }: { items: Not
                         borderTop: i ? 1 : 0, borderColor: "divider", bgcolor: n.read_at ? "transparent" : "action.hover",
                         "&:hover": { bgcolor: "action.selected" },
                       }}>
-                      <Box sx={{ width: 36, height: 36, borderRadius: 2, flexShrink: 0, display: "grid", placeItems: "center", color, bgcolor: "background.default", "& svg": { fontSize: 20 } }}>{icon}</Box>
+                      <Box sx={{ width: 36, height: 36, borderRadius: 2, flexShrink: 0, display: "grid", placeItems: "center", color, bgcolor: "background.default", "& svg": { fontSize: "1.25rem" } }}>{icon}</Box>
                       <Box sx={{ flex: 1, minWidth: 0 }}>
                         <Typography variant="body2" sx={{ fontWeight: n.read_at ? 550 : 750 }}>{n.title}</Typography>
                         <Typography variant="body2" color="text.secondary">{n.body}</Typography>

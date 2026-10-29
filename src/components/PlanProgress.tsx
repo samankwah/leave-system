@@ -21,19 +21,19 @@ export default function PlanProgress({ state, amendment }: { state: PlanState; a
         const label = current && problem ? (state === "returned" ? "Returned" : "Rejected") : s;
         return (
           <Stack key={s} direction="row" sx={{ alignItems: "center", flex: i < steps.length - 1 ? 1 : "none", minWidth: 0 }}>
-            <Stack direction="row" spacing={0.75} sx={{ alignItems: "center", minWidth: 0 }}>
+            <Stack direction="row" spacing={0.6} sx={{ alignItems: "center", minWidth: 0, flexShrink: 0 }}>
               <Box sx={{
-                width: 22, height: 22, borderRadius: "50%", flexShrink: 0, display: "grid", placeItems: "center", fontSize: 11, fontWeight: 700,
+                width: 22, height: 22, borderRadius: "50%", flexShrink: 0, display: "grid", placeItems: "center", fontSize: "0.6875rem", fontWeight: 700,
                 bgcolor: done ? "success.main" : current ? (problem ? "warning.main" : "primary.main") : "action.disabledBackground",
                 color: done || current ? "#fff" : "text.secondary",
               }}>
-                {done ? <CheckIcon sx={{ fontSize: 14 }} /> : current && problem ? <PriorityHighIcon sx={{ fontSize: 14 }} /> : i + 1}
+                {done ? <CheckIcon sx={{ fontSize: "0.875rem" }} /> : current && problem ? <PriorityHighIcon sx={{ fontSize: "0.875rem" }} /> : i + 1}
               </Box>
               <Typography variant="caption" noWrap sx={{ fontWeight: current || done ? 700 : 500, color: current || done ? "text.primary" : "text.secondary" }}>
                 {label}
               </Typography>
             </Stack>
-            {i < steps.length - 1 && <Box sx={{ flex: 1, height: 2, mx: 1, minWidth: 12, borderRadius: 1, bgcolor: i < at ? "success.main" : "divider" }} />}
+            {i < steps.length - 1 && <Box sx={{ flex: 1, height: 2, mx: 0.75, minWidth: 6, borderRadius: 1, bgcolor: i < at ? "success.main" : "divider" }} />}
           </Stack>
         );
       })}

@@ -51,7 +51,7 @@ function Tile({ label, value, hint, tone }: { label: string; value: React.ReactN
   return (
     <Paper sx={{ p: 2, borderRadius: "14px", height: "100%" }}>
       <Typography variant="body2" color="text.secondary">{label}</Typography>
-      <Typography sx={{ fontSize: 24, fontWeight: 750, color: tone ? `${tone}.main` : undefined, fontVariantNumeric: "tabular-nums" }}>{value}</Typography>
+      <Typography sx={{ fontSize: "1.5rem", fontWeight: 750, color: tone ? `${tone}.main` : undefined, fontVariantNumeric: "tabular-nums" }}>{value}</Typography>
       {hint && <Typography variant="caption" color="text.secondary">{hint}</Typography>}
     </Paper>
   );
@@ -119,7 +119,7 @@ export default function AdminView({ me, users, sessions, system }: { me: number;
                   <TableRow key={u.id} hover>
                     <TableCell>
                       <Stack direction="row" spacing={1.5} sx={{ alignItems: "center" }}>
-                        <Avatar sx={{ width: 32, height: 32, fontSize: 12, fontWeight: 700, bgcolor: "action.selected", color: "text.primary" }}>{initials(u.fullName)}</Avatar>
+                        <Avatar sx={{ width: 32, height: 32, fontSize: "0.75rem", fontWeight: 700, bgcolor: "action.selected", color: "text.primary" }}>{initials(u.fullName)}</Avatar>
                         <Box sx={{ minWidth: 0 }}>
                           <Typography variant="body2" sx={{ fontWeight: 650 }} noWrap>{u.fullName}{self ? " (you)" : ""}</Typography>
                           <Typography variant="caption" color="text.secondary" noWrap sx={{ display: "block" }}>{u.employeeId} · {u.email}</Typography>
@@ -178,7 +178,7 @@ export default function AdminView({ me, users, sessions, system }: { me: number;
         <Grid size={{ xs: 12, lg: 5 }}>
           <Stack spacing={2.5}>
             <Section title="System">
-              <KeyValue rows={[["Database", <Box key="d" component="span" sx={{ fontFamily: "monospace", fontSize: 12 }}>{system.database}</Box>], ["Schema version", system.schemaVersion], ["Runtime", `Node.js ${system.node}`]]} />
+              <KeyValue rows={[["Database", <Box key="d" component="span" sx={{ fontFamily: "monospace", fontSize: "0.75rem" }}>{system.database}</Box>], ["Schema version", system.schemaVersion], ["Runtime", `Node.js ${system.node}`]]} />
             </Section>
             <Paper variant="outlined" sx={{ p: 2.5, borderRadius: "14px", borderColor: "error.main" }}>
               <Typography variant="subtitle1" color="error.main">Danger zone</Typography>
@@ -195,7 +195,7 @@ export default function AdminView({ me, users, sessions, system }: { me: number;
         <DialogTitle>Temporary password</DialogTitle>
         <DialogContent>
           <Typography variant="body2" sx={{ mb: 2 }}>{tempPw?.name}&apos;s password was reset and their sessions ended. Share this one-time password securely; it won&apos;t be shown again.</Typography>
-          <Stack direction="row" sx={{ alignItems: "center", p: 1.5, borderRadius: 2, bgcolor: "action.hover", fontFamily: "monospace", fontSize: 16 }}>
+          <Stack direction="row" sx={{ alignItems: "center", p: 1.5, borderRadius: 2, bgcolor: "action.hover", fontFamily: "monospace", fontSize: "1rem" }}>
             <Box sx={{ flex: 1 }}>{tempPw?.password}</Box>
             <IconButton size="small" aria-label="Copy password" onClick={() => { navigator.clipboard?.writeText(tempPw?.password ?? ""); toast.info("Copied to clipboard."); }}><ContentCopyIcon fontSize="small" /></IconButton>
           </Stack>

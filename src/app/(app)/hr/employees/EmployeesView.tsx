@@ -145,7 +145,7 @@ export default function EmployeesView({ year, users, departments, offices, categ
                 <TableRow key={u.id} hover onClick={() => setViewing(u.id)} sx={{ cursor: "pointer", opacity: u.active ? 1 : 0.55 }}>
                   <TableCell>
                     <Stack direction="row" spacing={1.5} sx={{ alignItems: "center" }}>
-                      <Avatar sx={{ width: 32, height: 32, fontSize: 12, fontWeight: 700, bgcolor: "action.selected", color: "text.primary" }}>{initials(u.fullName)}</Avatar>
+                      <Avatar sx={{ width: 32, height: 32, fontSize: "0.75rem", fontWeight: 700, bgcolor: "action.selected", color: "text.primary" }}>{initials(u.fullName)}</Avatar>
                       <Box sx={{ minWidth: 0 }}>
                         <Typography variant="body2" sx={{ fontWeight: 650 }} noWrap>{u.fullName}{u.active ? "" : " (inactive)"}</Typography>
                         <Typography variant="caption" color="text.secondary" noWrap sx={{ display: "block" }}>{u.employeeId} · {u.jobTitle}</Typography>
@@ -279,7 +279,7 @@ export default function EmployeesView({ year, users, departments, offices, categ
         <DialogTitle>Employee created</DialogTitle>
         <DialogContent>
           <Typography variant="body2" sx={{ mb: 2 }}>Share this one-time temporary password with {created?.name} through a secure channel. It won&apos;t be shown again.</Typography>
-          <Stack direction="row" spacing={1} sx={{ alignItems: "center", p: 1.5, borderRadius: 2, bgcolor: "action.hover", fontFamily: "monospace", fontSize: 16 }}>
+          <Stack direction="row" spacing={1} sx={{ alignItems: "center", p: 1.5, borderRadius: 2, bgcolor: "action.hover", fontFamily: "monospace", fontSize: "1rem" }}>
             <Box sx={{ flex: 1 }}>{created?.password}</Box>
             <IconButton size="small" aria-label="Copy password" onClick={() => { navigator.clipboard?.writeText(created?.password ?? ""); toast.info("Copied to clipboard."); }}><ContentCopyIcon fontSize="small" /></IconButton>
           </Stack>

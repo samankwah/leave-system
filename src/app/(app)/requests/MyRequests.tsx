@@ -110,13 +110,13 @@ export default function MyRequests({ requests, today, openId }: {
             {shown.map((r) => (
               <ButtonBase key={r.id} onClick={() => setOpenReq(r.id)} sx={{ display: "flex", textAlign: "left", px: { xs: 2, md: 2.5 }, py: 1.75, gap: 2, "&:hover": { bgcolor: "action.hover" } }}>
                 <Box sx={{ width: 46, flexShrink: 0, textAlign: "center", borderRadius: 2, border: 1, borderColor: "divider", py: 0.5 }}>
-                  <Typography sx={{ fontSize: 10.5, fontWeight: 700, color: "secondary.main", textTransform: "uppercase", lineHeight: 1.3 }}>{MONTH_NAMES[Number(r.start.slice(5, 7)) - 1].slice(0, 3)}</Typography>
-                  <Typography sx={{ fontSize: 17, fontWeight: 700, lineHeight: 1.1 }}>{Number(r.start.slice(8))}</Typography>
+                  <Typography sx={{ fontSize: "0.65625rem", fontWeight: 700, color: "secondary.main", textTransform: "uppercase", lineHeight: 1.3 }}>{MONTH_NAMES[Number(r.start.slice(5, 7)) - 1].slice(0, 3)}</Typography>
+                  <Typography sx={{ fontSize: "1.0625rem", fontWeight: 700, lineHeight: 1.1 }}>{Number(r.start.slice(8))}</Typography>
                 </Box>
                 <Box sx={{ flex: 1, minWidth: 0 }}>
                   <Stack direction="row" spacing={1} sx={{ alignItems: "center", flexWrap: "wrap" }}>
                     <Typography variant="body2" sx={{ fontWeight: 650 }}>{formatRange(r)}</Typography>
-                    {r.attachmentName && <AttachFileIcon sx={{ fontSize: 15, color: "text.secondary" }} aria-label="Has attachment" />}
+                    {r.attachmentName && <AttachFileIcon sx={{ fontSize: "0.9375rem", color: "text.secondary" }} aria-label="Has attachment" />}
                   </Stack>
                   <Typography variant="caption" color="text.secondary" sx={{ display: "block" }} noWrap>
                     {r.days} working days · {Object.entries(r.breakdown).map(([m, d]) => `${monthLabel(m).split(" ")[0]} ${d}`).join(", ")}

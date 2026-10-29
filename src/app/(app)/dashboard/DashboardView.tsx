@@ -55,8 +55,8 @@ const FILTERS = [
 function DateBlock({ iso }: { iso: string }) {
   return (
     <Box sx={{ width: 44, flexShrink: 0, textAlign: "center", borderRadius: 2, border: 1, borderColor: "divider", py: 0.5, bgcolor: "background.default" }}>
-      <Typography sx={{ fontSize: 10.5, fontWeight: 700, color: "secondary.main", lineHeight: 1.3, textTransform: "uppercase" }}>{MONTH_NAMES[Number(iso.slice(5, 7)) - 1].slice(0, 3)}</Typography>
-      <Typography sx={{ fontSize: 17, fontWeight: 700, lineHeight: 1.1 }}>{Number(iso.slice(8))}</Typography>
+      <Typography sx={{ fontSize: "0.65625rem", fontWeight: 700, color: "secondary.main", lineHeight: 1.3, textTransform: "uppercase" }}>{MONTH_NAMES[Number(iso.slice(5, 7)) - 1].slice(0, 3)}</Typography>
+      <Typography sx={{ fontSize: "1.0625rem", fontWeight: 700, lineHeight: 1.1 }}>{Number(iso.slice(8))}</Typography>
     </Box>
   );
 }
@@ -133,7 +133,7 @@ export default function DashboardView(p: Props) {
               <Box>
                 <Typography variant="body2" color="text.secondary">Available to book in {p.year}</Typography>
                 <Stack direction="row" spacing={1} sx={{ alignItems: "baseline", mt: 0.5 }}>
-                  <Typography sx={{ fontSize: 44, fontWeight: 750, lineHeight: 1, letterSpacing: "-0.03em", fontVariantNumeric: "tabular-nums" }}>{b.projectedDays}</Typography>
+                  <Typography sx={{ fontSize: "2.75rem", fontWeight: 750, lineHeight: 1, letterSpacing: "-0.03em", fontVariantNumeric: "tabular-nums" }}>{b.projectedDays}</Typography>
                   <Typography color="text.secondary">of {b.entitlement} working days</Typography>
                 </Stack>
               </Box>

@@ -49,7 +49,7 @@ function Step({ n, title, done, children, action }: { n: number; title: string; 
     <Section>
       <Stack direction="row" spacing={1.5} sx={{ alignItems: "center", mb: 2 }}>
         <Box sx={{
-          width: 26, height: 26, borderRadius: "50%", display: "grid", placeItems: "center", fontSize: 13, fontWeight: 700, flexShrink: 0,
+          width: 26, height: 26, borderRadius: "50%", display: "grid", placeItems: "center", fontSize: "0.8125rem", fontWeight: 700, flexShrink: 0,
           bgcolor: done ? "success.main" : "primary.main", color: "#fff",
         }}>{done ? "✓" : n}</Box>
         <Typography variant="subtitle1" component="h2" sx={{ flex: 1 }}>{title}</Typography>
@@ -282,7 +282,7 @@ export default function RequestForm({ data, years, initial, editing }: Props) {
             <Stack spacing={2.5} sx={{ position: { lg: "sticky" }, top: { lg: 88 } }}>
               <Section title="Impact">
                 <Stack direction="row" spacing={1} sx={{ alignItems: "baseline" }}>
-                  <Typography sx={{ fontSize: 34, fontWeight: 750, lineHeight: 1, fontVariantNumeric: "tabular-nums" }}>{analysis?.days ?? 0}</Typography>
+                  <Typography sx={{ fontSize: "2.125rem", fontWeight: 750, lineHeight: 1, fontVariantNumeric: "tabular-nums" }}>{analysis?.days ?? 0}</Typography>
                   <Typography color="text.secondary">working days</Typography>
                 </Stack>
                 <Typography variant="caption" color="text.secondary">Weekends and public holidays excluded</Typography>
@@ -291,12 +291,12 @@ export default function RequestForm({ data, years, initial, editing }: Props) {
                 <Typography variant="overline" color="text.secondary">Annual balance</Typography>
                 <Stack direction="row" spacing={1.5} sx={{ alignItems: "center", mt: 0.5 }}>
                   <Box sx={{ textAlign: "center" }}>
-                    <Typography sx={{ fontSize: 22, fontWeight: 700, fontVariantNumeric: "tabular-nums" }}>{available}</Typography>
+                    <Typography sx={{ fontSize: "1.375rem", fontWeight: 700, fontVariantNumeric: "tabular-nums" }}>{available}</Typography>
                     <Typography variant="caption" color="text.secondary">available now</Typography>
                   </Box>
-                  <Typography color="text.disabled" sx={{ fontSize: 20 }}>→</Typography>
+                  <Typography color="text.disabled" sx={{ fontSize: "1.25rem" }}>→</Typography>
                   <Box sx={{ textAlign: "center" }}>
-                    <Typography sx={{ fontSize: 22, fontWeight: 700, fontVariantNumeric: "tabular-nums", color: analysis && analysis.balanceAfter < 0 ? "error.main" : "success.main" }}>
+                    <Typography sx={{ fontSize: "1.375rem", fontWeight: 700, fontVariantNumeric: "tabular-nums", color: analysis && analysis.balanceAfter < 0 ? "error.main" : "success.main" }}>
                       {analysis ? analysis.balanceAfter : available}
                     </Typography>
                     <Typography variant="caption" color="text.secondary">after this request</Typography>
@@ -329,8 +329,8 @@ export default function RequestForm({ data, years, initial, editing }: Props) {
                               <TableCell align="right">
                                 <Stack direction="row" spacing={0.5} sx={{ justifyContent: "flex-end", alignItems: "center" }}>
                                   <span>{plan}</span>
-                                  {covered ? <CheckCircleRoundedIcon sx={{ fontSize: 15, color: "success.main" }} aria-label="covered by plan" />
-                                    : <ErrorOutlineRoundedIcon sx={{ fontSize: 15, color: "error.main" }} aria-label="not covered by plan" />}
+                                  {covered ? <CheckCircleRoundedIcon sx={{ fontSize: "0.9375rem", color: "success.main" }} aria-label="covered by plan" />
+                                    : <ErrorOutlineRoundedIcon sx={{ fontSize: "0.9375rem", color: "error.main" }} aria-label="not covered by plan" />}
                                 </Stack>
                               </TableCell>
                               <TableCell align="right" sx={{ color: fullForMe ? "error.main" : undefined, fontWeight: fullForMe ? 700 : undefined }}>

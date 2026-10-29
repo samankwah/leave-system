@@ -112,7 +112,7 @@ interface DayProps {
 
 const DAY_SX_BASE = {
   width: "100%", aspectRatio: "1 / 1", maxHeight: 46, borderRadius: "10px", position: "relative",
-  fontSize: 13.5, fontVariantNumeric: "tabular-nums", transition: "background-color .12s, box-shadow .12s",
+  fontSize: "0.84375rem", fontVariantNumeric: "tabular-nums", transition: "background-color .12s, box-shadow .12s",
   "&.Mui-focusVisible": { outline: "2px solid", outlineColor: "secondary.main", outlineOffset: 1 },
 } as const;
 
@@ -192,7 +192,7 @@ function MonthGrid(p: MonthProps) {
         <Typography variant="subtitle1" component="h3">{monthLabel(p.month)}</Typography>
         {p.restricted ? (
           <Stack direction="row" spacing={0.5} sx={{ alignItems: "center", color: "text.secondary" }}>
-            <LockOutlinedIcon sx={{ fontSize: 14 }} /><Typography variant="caption" sx={{ fontWeight: 600 }}>Restricted</Typography>
+            <LockOutlinedIcon sx={{ fontSize: "0.875rem" }} /><Typography variant="caption" sx={{ fontWeight: 600 }}>Restricted</Typography>
           </Stack>
         ) : p.info ? (
           <Tooltip title={`${p.info.count} of ${p.info.capacity} employee slots used${p.own ? " (including yours)" : ""}`}>
@@ -428,11 +428,11 @@ export function MonthStrip(props: {
           >
             <Stack direction="row" spacing={0.5} sx={{ justifyContent: "space-between", alignItems: "center", minWidth: 0 }}>
               <Typography variant="caption" noWrap sx={{ fontWeight: 700, letterSpacing: "0.02em" }}>{MONTH_NAMES[i].slice(0, 3)}</Typography>
-              {restricted ? <LockOutlinedIcon sx={{ fontSize: 13, color: "text.disabled", flexShrink: 0 }} />
-                : full ? <Typography variant="caption" noWrap sx={{ fontWeight: 700, color: "error.main", fontSize: 10.5, flexShrink: 0 }}>FULL</Typography> : null}
+              {restricted ? <LockOutlinedIcon sx={{ fontSize: "0.8125rem", color: "text.disabled", flexShrink: 0 }} />
+                : full ? <Typography variant="caption" noWrap sx={{ fontWeight: 700, color: "error.main", fontSize: "0.65625rem", flexShrink: 0 }}>FULL</Typography> : null}
             </Stack>
             {restricted ? (
-              <Typography variant="caption" color="text.disabled" sx={{ lineHeight: "8px", fontSize: 10.5 }}>Restricted</Typography>
+              <Typography variant="caption" color="text.disabled" sx={{ lineHeight: "8px", fontSize: "0.65625rem" }}>Restricted</Typography>
             ) : (
               <CapacityPips count={info?.count ?? 0} capacity={info?.capacity ?? 5} own={props.ownMonths?.has(m)} size={7} />
             )}

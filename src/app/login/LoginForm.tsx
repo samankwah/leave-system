@@ -86,7 +86,7 @@ export default function LoginForm({ justReset }: { justReset: boolean }) {
           <Typography sx={{ fontWeight: 700 }}>Leave Management</Typography>
         </Stack>
         <Box>
-          <Typography sx={{ fontSize: 34, fontWeight: 750, lineHeight: 1.15, letterSpacing: "-0.02em", maxWidth: 420 }}>
+          <Typography sx={{ fontSize: "2.125rem", fontWeight: 750, lineHeight: 1.15, letterSpacing: "-0.02em", maxWidth: 420 }}>
             Plan the year. Book with confidence.
           </Typography>
           <Typography sx={{ mt: 2, color: "sidebar.muted", maxWidth: 420 }}>
@@ -121,7 +121,7 @@ export default function LoginForm({ justReset }: { justReset: boolean }) {
               label="Password" type={show ? "text" : "password"} value={password} onChange={(e) => setPassword(e.target.value)}
               onKeyUp={(e) => setCaps(e.getModifierState?.("CapsLock") ?? false)} onKeyDown={(e) => setCaps(e.getModifierState?.("CapsLock") ?? false)}
               autoComplete="current-password" error={!!pwError} fullWidth size="medium"
-              helperText={pwError || (caps ? <Stack component="span" direction="row" spacing={0.5} sx={{ alignItems: "center", color: "warning.main" }}><KeyboardCapslockIcon sx={{ fontSize: 14 }} /><span>Caps Lock is on</span></Stack> : " ")}
+              helperText={pwError || (caps ? <Stack component="span" direction="row" spacing={0.5} sx={{ alignItems: "center", color: "warning.main" }}><KeyboardCapslockIcon sx={{ fontSize: "0.875rem" }} /><span>Caps Lock is on</span></Stack> : " ")}
               slotProps={{
                 input: {
                   endAdornment: (

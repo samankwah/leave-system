@@ -58,7 +58,7 @@ const itemKey = (i: QueueItem) => `${i.kind}-${i.id}`;
 const kindLabel = (i: QueueItem) => (i.kind === "plan" ? (i.plan?.amendsPlanId ? "Plan amendment" : "Annual plan") : "Leave request");
 
 function Kbd({ children }: { children: React.ReactNode }) {
-  return <Box component="kbd" sx={{ fontFamily: "inherit", fontSize: 11, border: 1, borderColor: "divider", borderRadius: 0.75, px: 0.6, ml: 0.75, color: "text.secondary" }}>{children}</Box>;
+  return <Box component="kbd" sx={{ fontFamily: "inherit", fontSize: "0.6875rem", border: 1, borderColor: "divider", borderRadius: 0.75, px: 0.6, ml: 0.75, color: "text.secondary" }}>{children}</Box>;
 }
 
 function Detail({ item, isHistory, today, liveIssues, onDecide, busy, restrictedMonths }: {
@@ -333,7 +333,7 @@ export default function ApprovalsBoard({ pending, isHr, today, overdueDays, init
                 bgcolor: active ? "action.selected" : "transparent", borderLeft: 3, borderLeftColor: active ? "secondary.main" : "transparent",
                 "&:hover": { bgcolor: active ? "action.selected" : "action.hover" },
               }}>
-              <Avatar sx={{ width: 34, height: 34, fontSize: 13, fontWeight: 700, bgcolor: "action.selected", color: "text.primary" }}>{initials(i.employee.name)}</Avatar>
+              <Avatar sx={{ width: 34, height: 34, fontSize: "0.8125rem", fontWeight: 700, bgcolor: "action.selected", color: "text.primary" }}>{initials(i.employee.name)}</Avatar>
               <Box sx={{ flex: 1, minWidth: 0 }}>
                 <Stack direction="row" spacing={1} sx={{ alignItems: "center" }}>
                   <Typography variant="body2" sx={{ fontWeight: 650, flex: 1 }} noWrap>{i.employee.name}</Typography>

@@ -48,14 +48,14 @@ function BrandMark({ compact }: { compact?: boolean }) {
     <Stack direction="row" spacing={1.25} sx={{ alignItems: "center", minWidth: 0 }}>
       <Box sx={{
         width: 34, height: 34, borderRadius: 2, flexShrink: 0, display: "grid", placeItems: "center",
-        bgcolor: "sidebar.accent", color: "#1A1405", fontWeight: 800, fontSize: 15, letterSpacing: "-0.02em",
+        bgcolor: "sidebar.accent", color: "#1A1405", fontWeight: 800, fontSize: "0.9375rem", letterSpacing: "-0.02em",
       }} aria-hidden>
         LM
       </Box>
       {!compact && (
         <Box sx={{ minWidth: 0 }}>
-          <Typography sx={{ fontWeight: 700, fontSize: 15, lineHeight: 1.2, color: "sidebar.text" }} noWrap>Leave Management</Typography>
-          <Typography sx={{ fontSize: 11.5, color: "sidebar.muted" }} noWrap>GRA · prototype</Typography>
+          <Typography sx={{ fontWeight: 700, fontSize: "0.9375rem", lineHeight: 1.2, color: "sidebar.text" }} noWrap>Leave Management</Typography>
+          <Typography sx={{ fontSize: "0.71875rem", color: "sidebar.muted" }} noWrap>GRA · prototype</Typography>
         </Box>
       )}
     </Stack>
@@ -118,7 +118,7 @@ export default function AppShell({ user, unread, pendingApprovals, initialCollap
         {navSections(user.role).filter((s) => s.title !== "Account").map((s) => (
           <Box key={s.title} sx={{ mt: 2 }}>
             {rail ? <Divider sx={{ borderColor: "sidebar.border", mx: 1, mb: 1 }} /> : (
-              <Typography sx={{ px: 1.5, mb: 0.5, fontSize: 11, fontWeight: 600, letterSpacing: "0.08em", textTransform: "uppercase", color: "sidebar.muted" }}>
+              <Typography sx={{ px: 1.5, mb: 0.5, fontSize: "0.6875rem", fontWeight: 600, letterSpacing: "0.08em", textTransform: "uppercase", color: "sidebar.muted" }}>
                 {s.title}
               </Typography>
             )}
@@ -132,11 +132,11 @@ export default function AppShell({ user, unread, pendingApprovals, initialCollap
                   sx={{
                     position: "relative", width: "100%", justifyContent: rail ? "center" : "flex-start", gap: 1.5,
                     px: rail ? 0 : 1.5, height: 40, mb: 0.25, borderRadius: 2, color: active ? "sidebar.text" : "sidebar.muted",
-                    bgcolor: active ? "sidebar.active" : "transparent", fontSize: 14, fontWeight: active ? 600 : 500,
+                    bgcolor: active ? "sidebar.active" : "transparent", fontSize: "0.875rem", fontWeight: active ? 600 : 500,
                     transition: "background-color .15s, color .15s",
                     "&:hover": { bgcolor: active ? "sidebar.active" : "sidebar.hover", color: "sidebar.text" },
                     "&::before": active ? { content: '""', position: "absolute", left: -12, top: 10, bottom: 10, width: 3, borderRadius: 3, bgcolor: "sidebar.accent" } : undefined,
-                    "& svg": { fontSize: 20 },
+                    "& svg": { fontSize: "1.25rem" },
                   }}
                 >
                   <Badge color="secondary" badgeContent={count} max={99} variant={rail ? "dot" : "standard"} invisible={!count}
@@ -153,7 +153,7 @@ export default function AppShell({ user, unread, pendingApprovals, initialCollap
       </Box>
       <Box sx={{ p: 1.5, display: { xs: "none", md: "block" } }}>
         <ButtonBase onClick={toggleCollapsed} aria-label={collapsed ? "Expand sidebar" : "Collapse sidebar"}
-          sx={{ width: "100%", height: 36, borderRadius: 2, gap: 1, color: "sidebar.muted", justifyContent: rail ? "center" : "flex-start", px: rail ? 0 : 1.5, fontSize: 13, "&:hover": { bgcolor: "sidebar.hover", color: "sidebar.text" } }}>
+          sx={{ width: "100%", height: 36, borderRadius: 2, gap: 1, color: "sidebar.muted", justifyContent: rail ? "center" : "flex-start", px: rail ? 0 : 1.5, fontSize: "0.8125rem", "&:hover": { bgcolor: "sidebar.hover", color: "sidebar.text" } }}>
           {collapsed ? <KeyboardDoubleArrowRightIcon fontSize="small" /> : <><KeyboardDoubleArrowLeftIcon fontSize="small" />Collapse</>}
         </ButtonBase>
       </Box>
@@ -184,18 +184,18 @@ export default function AppShell({ user, unread, pendingApprovals, initialCollap
             <ButtonBase onClick={() => setPalette(true)} aria-label="Search pages and actions (Ctrl+K)"
               sx={{
                 display: { xs: "none", sm: "flex" }, gap: 1, height: 36, px: 1.5, borderRadius: 2, border: 1, borderColor: "divider",
-                color: "text.secondary", bgcolor: "background.paper", minWidth: 220, justifyContent: "flex-start", fontSize: 13,
+                color: "text.secondary", bgcolor: "background.paper", minWidth: 220, justifyContent: "flex-start", fontSize: "0.8125rem",
                 "&:hover": { borderColor: "text.disabled" },
               }}>
               <SearchIcon fontSize="small" />
               <Box component="span" sx={{ flex: 1, textAlign: "left" }}>Search or jump to…</Box>
-              <Box component="kbd" sx={{ fontFamily: "inherit", fontSize: 11, border: 1, borderColor: "divider", borderRadius: 1, px: 0.75, py: 0.1 }}>Ctrl K</Box>
+              <Box component="kbd" sx={{ fontFamily: "inherit", fontSize: "0.6875rem", border: 1, borderColor: "divider", borderRadius: 1, px: 0.75, py: 0.1 }}>Ctrl K</Box>
             </ButtonBase>
             <IconButton onClick={() => setPalette(true)} sx={{ display: { sm: "none" } }} aria-label="Search"><SearchIcon /></IconButton>
             <NotificationBell unread={unread} />
             <Tooltip title="Account">
               <IconButton onClick={(e) => setAnchor(e.currentTarget)} aria-label="Account menu" sx={{ p: 0.5 }}>
-                <Avatar sx={{ width: 34, height: 34, fontSize: 13, fontWeight: 700, bgcolor: "primary.main", color: "primary.contrastText" }}>
+                <Avatar sx={{ width: 34, height: 34, fontSize: "0.8125rem", fontWeight: 700, bgcolor: "primary.main", color: "primary.contrastText" }}>
                   {initials(user.fullName)}
                 </Avatar>
               </IconButton>
@@ -227,11 +227,11 @@ export default function AppShell({ user, unread, pendingApprovals, initialCollap
               alignItems: "center", px: { xs: 2, md: 3 }, py: 0.75, borderTop: 1, borderColor: "divider",
               bgcolor: `rgba(${t.vars!.palette.secondary.mainChannel} / 0.08)`,
             })}>
-              <ScienceOutlinedIcon sx={{ fontSize: 16, color: "secondary.main" }} />
+              <ScienceOutlinedIcon sx={{ fontSize: "1rem", color: "secondary.main" }} />
               <Typography variant="caption" sx={{ flex: 1 }} color="text.secondary">
                 <b>Prototype</b> with synthetic data. Leave rules are proposals awaiting confirmation against GRA policy.
               </Typography>
-              <IconButton size="small" onClick={dismissBanner} aria-label="Dismiss prototype notice"><CloseIcon sx={{ fontSize: 16 }} /></IconButton>
+              <IconButton size="small" onClick={dismissBanner} aria-label="Dismiss prototype notice"><CloseIcon sx={{ fontSize: "1rem" }} /></IconButton>
             </Stack>
           </Collapse>
         </AppBar>

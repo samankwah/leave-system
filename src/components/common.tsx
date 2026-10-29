@@ -25,7 +25,7 @@ export function PageHeader({ title, subtitle, actions, crumbs, eyebrow }: {
   return (
     <Box sx={{ mb: { xs: 2.5, md: 3.5 } }}>
       {crumbs && (
-        <Breadcrumbs sx={{ mb: 1, fontSize: 13 }} aria-label="Breadcrumb">
+        <Breadcrumbs sx={{ mb: 1, fontSize: "0.8125rem" }} aria-label="Breadcrumb">
           {crumbs.map((c) => c.href
             ? <Typography key={c.label} component={Link} href={c.href} variant="body2" color="text.secondary" sx={{ textDecoration: "none", "&:hover": { color: "text.primary" } }}>{c.label}</Typography>
             : <Typography key={c.label} variant="body2" color="text.primary">{c.label}</Typography>)}
@@ -151,7 +151,7 @@ export function Stat({ label, value, hint, tone }: { label: string; value: React
   return (
     <Box>
       <Typography variant="caption" color="text.secondary" sx={{ display: "block", fontWeight: 500 }}>{label}</Typography>
-      <Typography sx={{ fontSize: 22, fontWeight: 700, lineHeight: 1.3, letterSpacing: "-0.01em", color: tone ? `${tone}.main` : undefined, fontVariantNumeric: "tabular-nums" }}>{value}</Typography>
+      <Typography sx={{ fontSize: "1.375rem", fontWeight: 700, lineHeight: 1.3, letterSpacing: "-0.01em", color: tone ? `${tone}.main` : undefined, fontVariantNumeric: "tabular-nums" }}>{value}</Typography>
       {hint && <Typography variant="caption" color="text.secondary">{hint}</Typography>}
     </Box>
   );

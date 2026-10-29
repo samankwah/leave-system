@@ -116,7 +116,7 @@ export default function RosterView({ year, years, rows, occupancy, amendments }:
                     <TableCell key={m} align="center" sx={{ p: "4px !important" }}>
                       {tip && (
                         <Tooltip title={tip}>
-                          <Box sx={{ mx: "auto", maxWidth: 52, height: 30, borderRadius: 1.5, bgcolor: bg, color: fg, display: "grid", placeItems: "center", fontWeight: 700, fontSize: 13 }}>{a || p}</Box>
+                          <Box sx={{ mx: "auto", maxWidth: 52, height: 30, borderRadius: 1.5, bgcolor: bg, color: fg, display: "grid", placeItems: "center", fontWeight: 700, fontSize: "0.8125rem" }}>{a || p}</Box>
                         </Tooltip>
                       )}
                     </TableCell>

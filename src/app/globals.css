@@ -1,5 +1,15 @@
 @layer base, mui;
 
+/*
+ * Desktop text scale: all typography is in rem, so raising the root size enlarges every label,
+ * heading and table on screens 900px+ (MUI "md") while phones keep the compact 16px base.
+ */
+@media (min-width: 900px) {
+  html {
+    font-size: 106.25%; /* 17px */
+  }
+}
+
 /* `clip` (not `hidden`) so body doesn't become a scroll container, which would break the sticky top bar. */
 html,
 body {

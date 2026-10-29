@@ -33,7 +33,7 @@ function Kpi({ label, value, hint }: { label: string; value: React.ReactNode; hi
   return (
     <Paper sx={{ p: 2, borderRadius: "14px", height: "100%" }}>
       <Typography variant="body2" color="text.secondary">{label}</Typography>
-      <Typography sx={{ fontSize: 28, fontWeight: 750, letterSpacing: "-0.02em", lineHeight: 1.3, fontVariantNumeric: "tabular-nums" }}>{value}</Typography>
+      <Typography sx={{ fontSize: "1.75rem", fontWeight: 750, letterSpacing: "-0.02em", lineHeight: 1.3, fontVariantNumeric: "tabular-nums" }}>{value}</Typography>
       <Typography variant="caption" color="text.secondary">{hint}</Typography>
     </Paper>
   );

@@ -190,7 +190,7 @@ export default function PolicyView({ rows, activeYear, categories, holidays, dep
             {SECTIONS.map((s) => (
               <ButtonBase key={s.key} onClick={() => setSection(s.key)} aria-current={section === s.key ? "page" : undefined}
                 sx={{
-                  justifyContent: "flex-start", gap: 1.25, px: 1.5, height: 40, borderRadius: 2, whiteSpace: "nowrap", fontSize: 14,
+                  justifyContent: "flex-start", gap: 1.25, px: 1.5, height: 40, borderRadius: 2, whiteSpace: "nowrap", fontSize: "0.875rem",
                   fontWeight: section === s.key ? 650 : 500, color: section === s.key ? "text.primary" : "text.secondary",
                   bgcolor: section === s.key ? "action.selected" : "transparent", "&:hover": { bgcolor: "action.hover" },
                 }}>
@@ -297,7 +297,7 @@ export default function PolicyView({ rows, activeYear, categories, holidays, dep
                       alignItems: "center", p: 1.5, borderRadius: 2, border: 1,
                       borderColor: testResult?.routeId === r.id ? "secondary.main" : "divider", opacity: r.active ? 1 : 0.5,
                     }}>
-                      <Box sx={{ width: 28, height: 28, borderRadius: "50%", bgcolor: "action.selected", display: "grid", placeItems: "center", fontSize: 12, fontWeight: 700 }}>{i + 1}</Box>
+                      <Box sx={{ width: 28, height: 28, borderRadius: "50%", bgcolor: "action.selected", display: "grid", placeItems: "center", fontSize: "0.75rem", fontWeight: 700 }}>{i + 1}</Box>
                       <Box sx={{ flex: 1, minWidth: 0 }}>
                         <Typography variant="body2" sx={{ fontWeight: 650 }}>{describeRoute(r)} → {describeApprover(r)}</Typography>
                         <Typography variant="caption" color="text.secondary">Priority {r.priority}{r.note ? ` · ${r.note}` : ""}{r.active ? "" : " · inactive"}</Typography>

@@ -84,8 +84,8 @@ export default function Wallchart({ data, month, holidays, today, restricted }: 
               textAlign: "center", py: 0.5, borderBottom: 1, borderColor: "divider", bgcolor: isOff(d) ? "leave.weekend" : "background.paper",
               boxShadow: d === today ? (t) => `inset 0 -2px 0 ${t.vars!.palette.leave.today}` : undefined,
             }}>
-              <Typography sx={{ fontSize: 10, color: "text.disabled", lineHeight: 1.2 }}>{"SMTWTFS"[new Date(parseISO(d)).getUTCDay()]}</Typography>
-              <Typography sx={{ fontSize: 12, fontWeight: d === today ? 800 : 600, color: holidays.has(d) ? "leave.holidayAccent" : "text.primary" }}>{Number(d.slice(8))}</Typography>
+              <Typography sx={{ fontSize: "0.625rem", color: "text.disabled", lineHeight: 1.2 }}>{"SMTWTFS"[new Date(parseISO(d)).getUTCDay()]}</Typography>
+              <Typography sx={{ fontSize: "0.75rem", fontWeight: d === today ? 800 : 600, color: holidays.has(d) ? "leave.holidayAccent" : "text.primary" }}>{Number(d.slice(8))}</Typography>
             </Box>
           ))}
           {people.map((p) => (
@@ -124,7 +124,7 @@ export default function Wallchart({ data, month, holidays, today, restricted }: 
             const n = isOff(d) ? 0 : offCount(d);
             return (
               <Box key={d} sx={{ bgcolor: "background.default", textAlign: "center", py: 0.75 }}>
-                <Typography sx={{ fontSize: 11.5, fontWeight: 700, color: n ? "text.primary" : "text.disabled" }}>{isOff(d) ? "" : n || "·"}</Typography>
+                <Typography sx={{ fontSize: "0.71875rem", fontWeight: 700, color: n ? "text.primary" : "text.disabled" }}>{isOff(d) ? "" : n || "·"}</Typography>
               </Box>
             );
           })}
