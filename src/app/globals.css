@@ -1,0 +1,15 @@
+@layer base, mui;
+
+/* `clip` (not `hidden`) so body doesn't become a scroll container, which would break the sticky top bar. */
+html,
+body {
+  max-width: 100vw;
+  overflow-x: clip;
+}
+
+/* Base link reset lives in a layer below MUI so component styles (e.g. <Button component={Link}>) win. */
+@layer base {
+  a {
+    color: inherit;
+  }
+}
