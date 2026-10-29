@@ -65,3 +65,14 @@ describe("deterministic formatting", () => {
     expect(relativeDays("2027-03-01", "2026-10-29")).toBe("in 4 months");
   });
 });
+
+describe("Postgres TLS settings", () => {
+  it("pins sslmode=verify-full for require/prefer/verify-ca and leaves other URLs alone", async () => {
+    const { withVerifiedSsl } = await import("@/server/drivers");
+    expect(withVerifiedSsl("postgresql://u:p@ep-x.neon.tech/db?sslmode=require&channel_binding=require"))
+      .toBe("postgresql://u:p@ep-x.neon.tech/db?sslmode=verify-full&channel_binding=require");
+    expect(withVerifiedSsl("postgresql://u:p@h/db?sslmode=verify-full")).toContain("sslmode=verify-full");
+    expect(withVerifiedSsl("postgresql://u:p@h/db")).toBe("postgresql://u:p@h/db");
+    expect(withVerifiedSsl("not a url")).toBe("not a url");
+  });
+});

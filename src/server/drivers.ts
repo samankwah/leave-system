@@ -48,8 +48,25 @@ class PgDb implements DB {
   }
 }
 
+/**
+ * pg currently treats sslmode=prefer/require/verify-ca as verify-full and warns that this will weaken
+ * to libpq semantics in pg v9. Pin the secure behaviour explicitly (Neon uses publicly trusted
+ * certificates, so full verification works) — this also silences the warning.
+ */
+export function withVerifiedSsl(connectionString: string): string {
+  try {
+    const url = new URL(connectionString);
+    const mode = url.searchParams.get("sslmode");
+    if (mode === "prefer" || mode === "require" || mode === "verify-ca") url.searchParams.set("sslmode", "verify-full");
+    return url.toString();
+  } catch {
+    return connectionString;
+  }
+}
+
 /** Pooled connection to Neon. On Vercel Fluid compute the pool is shared across requests on an instance. */
-export async function openPg(connectionString: string): Promise<DB> {
+export async function openPg(rawConnectionString: string): Promise<DB> {
+  const connectionString = withVerifiedSsl(rawConnectionString);
   const pg = await import("pg");
   // COUNT(*) and other int8 results arrive as strings by default; these values are small.
   pg.types.setTypeParser(20, (v) => Number.parseInt(v, 10));
